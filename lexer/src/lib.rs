@@ -1,14 +1,220 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+use logos::Logos;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[derive(Logos, Debug, PartialEq)]
+#[logos(skip r"[ \t\v\n\f]+")]
+pub enum Token {
+    #[token("auto")]
+    Auto,
+    #[token("break")]
+    Break,
+    #[token("case")]
+    Case,
+    #[token("char")]
+    Char,
+    #[token("const")]
+    Const,
+    #[token("continue")]
+    Continue,
+    #[token("default")]
+    Default,
+    #[token("do")]
+    Do,
+    #[token("double")]
+    Double,
+    #[token("else")]
+    Else,
+    #[token("enum")]
+    Enum,
+    #[token("extern")]
+    Extern,
+    #[token("float")]
+    Float,
+    #[token("for")]
+    For,
+    #[token("goto")]
+    Goto,
+    #[token("if")]
+    If,
+    #[token("inline")]
+    Inline,
+    #[token("int")]
+    Int,
+    #[token("long")]
+    Long,
+    #[token("register")]
+    Register,
+    #[token("restrict")]
+    Restrict,
+    #[token("return")]
+    Return,
+    #[token("short")]
+    Short,
+    #[token("signed")]
+    Signed,
+    #[token("sizeof")]
+    Sizeof,
+    #[token("static")]
+    Static,
+    #[token("struct")]
+    Struct,
+    #[token("switch")]
+    Switch,
+    #[token("typedef")]
+    Typedef,
+    #[token("union")]
+    Union,
+    #[token("unsigned")]
+    Unsigned,
+    #[token("void")]
+    Void,
+    #[token("volatile")]
+    Volatile,
+    #[token("while")]
+    While,
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+    #[token("_Alignas")]
+    Alignas,
+    #[token("_Alignof")]
+    Alignof,
+    #[token("_Atomic")]
+    Atomic,
+    #[token("_Bool")]
+    Bool,
+    #[token("_Complex")]
+    Complex,
+    #[token("_Generic")]
+    Generic,
+    #[token("_Imaginary")]
+    Imaginary,
+    #[token("_Noreturn")]
+    Noreturn,
+    #[token("_Static_assert")]
+    StaticAssert,
+    #[token("_Thread_local")]
+    ThreadLocal,
+    #[token("__func__")]
+    FuncName,
+
+    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*")]
+    Identifier,
+
+    #[regex(r"0[xX][0-9a-fA-F]+")]
+    HexConstant,
+    #[regex(r"[1-9][0-9]*")]
+    DecConstant,
+    #[regex(r"0[0-7]*")]
+    OctConstant,
+    #[regex(r"(u|U|l|L|ll|LL)*", priority = 0)]
+    IntegerSuffix,
+
+    #[regex(r#"(u|U|L)?'([^'\\\n]|\\.)+'"#)]
+    CharConstant,
+
+    #[regex(r"[0-9]+\.[0-9]*([eE][+-]?[0-9]+)?[fFlL]?")]
+    FloatConstant,
+    #[regex(r"[0-9]+([eE][+-]?[0-9]+)[fFlL]?")]
+    FloatExpConstant,
+    #[regex(r"0[xX][0-9a-fA-F]+\.[0-9a-fA-F]*([pP][+-]?[0-9]+)?[fFlL]?")]
+    HexFloatConstant,
+
+    #[regex(r#"(u8|u|U|L)?\"([^"\\\n]|\\.)*\""#)]
+    StringLiteral,
+
+    #[token("...")]
+    Ellipsis,
+    #[token(">>=")]
+    RightAssign,
+    #[token("<<=")]
+    LeftAssign,
+    #[token("+=")]
+    AddAssign,
+    #[token("-=")]
+    SubAssign,
+    #[token("*=")]
+    MulAssign,
+    #[token("/=")]
+    DivAssign,
+    #[token("%=")]
+    ModAssign,
+    #[token("&=")]
+    AndAssign,
+    #[token("^=")]
+    XorAssign,
+    #[token("|=")]
+    OrAssign,
+    #[token(">>")]
+    RightOp,
+    #[token("<<")]
+    LeftOp,
+    #[token("++")]
+    IncOp,
+    #[token("--")]
+    DecOp,
+    #[token("->")]
+    PtrOp,
+    #[token("&&")]
+    AndOp,
+    #[token("||")]
+    OrOp,
+    #[token("<=")]
+    LeOp,
+    #[token(">=")]
+    GeOp,
+    #[token("==")]
+    EqOp,
+    #[token("!=")]
+    NeOp,
+
+    #[token(";")]
+    Semicolon,
+    #[token("{")]
+    LBrace,
+    #[token("}")]
+    RBrace,
+    #[token(",")]
+    Comma,
+    #[token(":")]
+    Colon,
+    #[token("=")]
+    Assign,
+    #[token("(")]
+    LParen,
+    #[token(")")]
+    RParen,
+    #[token("[")]
+    LBracket,
+    #[token("]")]
+    RBracket,
+    #[token(".")]
+    Dot,
+    #[token("&")]
+    Amp,
+    #[token("!")]
+    Bang,
+    #[token("~")]
+    Tilde,
+    #[token("-")]
+    Minus,
+    #[token("+")]
+    Plus,
+    #[token("*")]
+    Star,
+    #[token("/")]
+    Slash,
+    #[token("%")]
+    Percent,
+    #[token("<")]
+    Lt,
+    #[token(">")]
+    Gt,
+    #[token("^")]
+    Caret,
+    #[token("|")]
+    Pipe,
+    #[token("?")]
+    Question,
+
+    #[regex(r"/\*([^*]|\*+[^*/])*\*+/", logos::skip)]
+    #[regex(r"//[^\n]*", logos::skip)]
+    Comment,
 }
