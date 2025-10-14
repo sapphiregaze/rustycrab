@@ -1,5 +1,11 @@
 use logos::{Lexer, Logos, Skip};
 
+/// `Extras` holds additional metadata for each token.
+///
+/// This includes:
+/// - `lexeme`: the matched string slice from the source.
+/// - `line`: the current line number in the source code.
+/// - `column`: the column position where the token starts.
 #[derive(Debug, PartialEq)]
 pub struct Extras {
     pub lexeme: String,
@@ -8,6 +14,10 @@ pub struct Extras {
 }
 
 impl Default for Extras {
+    /// Provides default values for `Extras`:
+    /// - `lexeme` is empty
+    /// - `line` starts at 1
+    /// - `column` starts at 0
     fn default() -> Self {
         Self {
             lexeme: String::new(),
@@ -17,12 +27,22 @@ impl Default for Extras {
     }
 }
 
+/// Handles newline tokens (`\n`) in the source code.
+///
+/// Increments the line counter and updates the column to the end of the line.
+/// Returns `Skip` to ignore the newline token itself.
 fn newline_callback(lex: &mut Lexer<Token>) -> Skip {
     lex.extras.line += 1;
     lex.extras.column = lex.span().end;
     Skip
 }
 
+/// Generates an `Extras` instance for a matched token.
+///
+/// Captures:
+/// - the lexeme string
+/// - current line
+/// - column (calculated relative to last newline)
 fn token_callback(lex: &mut Lexer<Token>) -> Extras {
     let lexeme = lex.slice().to_string();
     let line = lex.extras.line;
@@ -34,6 +54,9 @@ fn token_callback(lex: &mut Lexer<Token>) -> Extras {
     }
 }
 
+/// Handles multi-line comments.
+///
+/// Updates line and column tracking appropriately, and skips the comment token.
 fn comment_callback(lex: &mut Lexer<Token>) -> Skip {
     let slice = lex.slice();
     let newlines = slice.matches('\n').count();
@@ -44,11 +67,16 @@ fn comment_callback(lex: &mut Lexer<Token>) -> Skip {
     Skip
 }
 
+/// Tokens for the C syntax.
+///
+/// Uses the `Extras` struct to track line, column, and lexeme metadata.
+/// Includes keywords, identifiers, constants, operators, punctuation, and comments.
 #[derive(Logos, Debug, PartialEq)]
 #[logos(extras = Extras)]
 #[logos(skip(r"\n", newline_callback))]
 #[logos(skip r"[ \t\v\f]")]
 pub enum Token {
+    // === Keywords ===
     #[token("auto", token_callback)]
     Auto(Extras),
     #[token("break", token_callback)]
@@ -141,9 +169,11 @@ pub enum Token {
     #[token("__func__", token_callback)]
     FuncName(Extras),
 
+    // === Identifiers ===
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", token_callback)]
     Identifier(Extras),
 
+    // === Constants ===
     #[regex(
         r"0[xX][a-fA-F0-9]+(((u|U)(l|L|ll|LL)?)|((l|L|ll|LL)(u|U)?))?",
         token_callback,
@@ -179,6 +209,7 @@ pub enum Token {
     #[regex(r#"(u8|u|U|L)?\"([^"\\\n]|\\.)*\""#, token_callback)]
     StringLiteral(Extras),
 
+    // === Operators ===
     #[token("...", token_callback)]
     Ellipsis(Extras),
     #[token(">>=", token_callback)]
@@ -224,6 +255,7 @@ pub enum Token {
     #[token("!=", token_callback)]
     NeOp(Extras),
 
+    // === Characters ===
     #[token(";", token_callback)]
     Semicolon(Extras),
     #[token("{", token_callback)]
@@ -273,6 +305,9 @@ pub enum Token {
     #[token("?", token_callback)]
     Question(Extras),
 
+    // === Comments ===
+    /// Multi-line (`/* ... */`) and single-line (`// ...`) comments.
+    /// Updates line/column counters but does not produce tokens.
     #[regex(
         r#"(?m)/\*([^"*]|".*")*\*+(([^"/*]|".*")([^"*]|".*")*\*+)*/"#,
         comment_callback
