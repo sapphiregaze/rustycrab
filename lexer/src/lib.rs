@@ -177,15 +177,15 @@ pub enum Token {
     #[regex(
         r"0[xX][a-fA-F0-9]+(((u|U)(l|L|ll|LL)?)|((l|L|ll|LL)(u|U)?))?",
         token_callback,
-        priority = 3
-    )]
-    #[regex(
-        r"[1-9][0-9]*(((u|U)(l|L|ll|LL)?)|((l|L|ll|LL)(u|U)?))?",
-        token_callback,
-        priority = 3
+        priority = 7
     )]
     #[regex(
         r"0[0-7]*(((u|U)(l|L|ll|LL)?)|((l|L|ll|LL)(u|U)?))?",
+        token_callback,
+        priority = 5
+    )]
+    #[regex(
+        r"[1-9][0-9]*(((u|U)(l|L|ll|LL)?)|((l|L|ll|LL)(u|U)?))?",
         token_callback,
         priority = 3
     )]
@@ -314,4 +314,153 @@ pub enum Token {
     )]
     #[regex(r"//[^\n]*", logos::skip)]
     Comment,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use logos::Logos;
+
+    fn lex_to_tokens(input: &str) -> Vec<Token> {
+        Token::lexer(input).filter_map(|res| res.ok()).collect()
+    }
+
+    #[test]
+    fn test_keywords() {
+        let src = "int return float _Generic";
+        let tokens = lex_to_tokens(src);
+        let expected: Vec<(&str, usize)> =
+            vec![("int", 1), ("return", 5), ("float", 12), ("_Generic", 18)];
+
+        for (token, (lexeme, column)) in tokens.iter().zip(expected.iter()) {
+            match token {
+                Token::Int(ex) | Token::Return(ex) | Token::Float(ex) | Token::Generic(ex) => {
+                    assert_eq!(&ex.lexeme, lexeme);
+                    assert_eq!(ex.line, 1);
+                    assert_eq!(ex.column, *column);
+                }
+                _ => panic!("Unexpected token {:?}", token),
+            }
+        }
+
+        assert_eq!(tokens.len(), expected.len());
+    }
+
+    #[test]
+    fn test_identifiers() {
+        let src = "foo _bar baz123";
+        let tokens = lex_to_tokens(src);
+
+        let lexemes: Vec<String> = tokens
+            .iter()
+            .map(|t| match t {
+                Token::Identifier(e) => e.lexeme.clone(),
+                _ => "".to_string(),
+            })
+            .collect();
+
+        assert_eq!(lexemes, vec!["foo", "_bar", "baz123"]);
+    }
+
+    #[test]
+    fn test_integer_constants() {
+        let src = "0 123 0xff 0755";
+        let tokens = lex_to_tokens(src);
+
+        let lexemes: Vec<String> = tokens
+            .iter()
+            .map(|t| match t {
+                Token::IntegerConstant(e) => e.lexeme.clone(),
+                _ => "".to_string(),
+            })
+            .collect();
+
+        assert_eq!(lexemes, vec!["0", "123", "0xff", "0755"]);
+    }
+
+    #[test]
+    fn test_float_constants() {
+        let src = "1.23 4.5e6 0x1.8p1";
+        let tokens = lex_to_tokens(src);
+
+        let lexemes: Vec<String> = tokens
+            .iter()
+            .map(|t| match t {
+                Token::FloatConstant(e) => e.lexeme.clone(),
+                _ => "".to_string(),
+            })
+            .collect();
+
+        assert_eq!(lexemes, vec!["1.23", "4.5e6", "0x1.8p1"]);
+    }
+
+    #[test]
+    fn test_operators_and_characters() {
+        let src = "+ - * / % ++ -- += -= == != <= >= && || ; , { }";
+        let tokens = lex_to_tokens(src);
+
+        let lexemes: Vec<String> = tokens
+            .iter()
+            .map(|t| match t {
+                Token::Plus(e)
+                | Token::Minus(e)
+                | Token::Star(e)
+                | Token::Slash(e)
+                | Token::Percent(e)
+                | Token::IncOp(e)
+                | Token::DecOp(e)
+                | Token::AddAssign(e)
+                | Token::SubAssign(e)
+                | Token::EqOp(e)
+                | Token::NeOp(e)
+                | Token::LeOp(e)
+                | Token::GeOp(e)
+                | Token::AndOp(e)
+                | Token::OrOp(e)
+                | Token::Semicolon(e)
+                | Token::Comma(e)
+                | Token::LBrace(e)
+                | Token::RBrace(e) => e.lexeme.clone(),
+                _ => "".to_string(),
+            })
+            .collect();
+
+        assert_eq!(
+            lexemes,
+            vec![
+                "+", "-", "*", "/", "%", "++", "--", "+=", "-=", "==", "!=", "<=", ">=", "&&",
+                "||", ";", ",", "{", "}"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_comments_and_line_tracking() {
+        let src = "int a; // variable\n/* multi\nline comment */\nfloat b;";
+        let tokens = lex_to_tokens(src);
+        let expected: Vec<(&str, usize, usize)> = vec![
+            ("int", 1, 1),
+            ("a", 1, 5),
+            (";", 1, 6),
+            ("float", 4, 1),
+            ("b", 4, 7),
+            (";", 4, 8),
+        ];
+
+        for (token, (lexeme, line, column)) in tokens.iter().zip(expected.iter()) {
+            match token {
+                Token::Int(ex)
+                | Token::Float(ex)
+                | Token::Identifier(ex)
+                | Token::Semicolon(ex) => {
+                    assert_eq!(&ex.lexeme, lexeme);
+                    assert_eq!(ex.line, *line);
+                    assert_eq!(ex.column, *column);
+                }
+                _ => panic!("Unexpected token {:?}", token),
+            }
+        }
+
+        assert_eq!(tokens.len(), expected.len());
+    }
 }
