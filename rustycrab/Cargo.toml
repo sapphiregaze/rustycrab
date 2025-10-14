@@ -11,5 +11,7 @@ path = "src/main.rs"
 [dependencies]
 clap = "4.5.49"
 lexer = { path = "../lexer/" }
+parser = { path = "../parser/" }
+chumsky = "0.11.1"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 tracing.workspace = true

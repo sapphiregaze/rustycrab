@@ -1,14 +1,18 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+use chumsky::prelude::*;
+
+pub fn parser<'src>() -> impl Parser<'src, &'src str, ()> {
+  end()
 }
 
-#[cfg(test)]
 mod tests {
-    use super::*;
+  use super::*;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+  #[test]
+  fn test_parser() {
+    // Our parser expects empty strings, so this should parse successfully
+    assert_eq!(parser().parse("").into_result(), Ok(()));
+
+    // Anything other than an empty string should produce an error
+    assert!(parser().parse("123").has_errors());
+  }
 }
