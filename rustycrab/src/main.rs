@@ -5,9 +5,11 @@ use std::fs;
 use std::path::PathBuf;
 use std::process;
 
-<<<<<<< HEAD
 use command::build_command;
 use lexer::Lexer;
+use chumsky::Parser;
+use parser::parser;
+
 use tracing::debug;
 use tracing::error;
 use tracing_subscriber::EnvFilter;
@@ -15,16 +17,17 @@ use tracing_subscriber::fmt;
 
 fn main() {
     // Our parser expects empty strings, so this should parse successfully
-    println!("{:?}", parser().parse("").into_result());
+    println!("{:?}", parser().parse("test").into_result());
 
     // Anything other than an empty string should produce an error
-    println!("{:?}", parser().parse("123"));
+    println!("{:?}", parser().parse("testtest").into_result());
 
     let mut command = build_command();
 
     if env::args().len() == 1 {
         command.print_help().expect("failed to print help");
         process::exit(0);
+    }
 
     let matches = command.get_matches();
 

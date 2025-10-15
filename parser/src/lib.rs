@@ -1,18 +1,22 @@
 use chumsky::prelude::*;
 
-pub fn parser<'src>() -> impl Parser<'src, &'src str, ()> {
-  end()
+#[derive(Clone, Debug)]
+pub enum Values {
+  Okay,
+  Invalid
 }
 
+pub fn parser<'src>() -> impl Parser<'src, &'src str, Values> {
+  just("test").to(Values::Okay).then_ignore(empty())
+}
+
+#[cfg(test)]
 mod tests {
   use super::*;
 
   #[test]
   fn test_parser() {
-    // Our parser expects empty strings, so this should parse successfully
-    assert_eq!(parser().parse("").into_result(), Ok(()));
-
-    // Anything other than an empty string should produce an error
-    assert!(parser().parse("123").has_errors());
+    assert!(parser().parse("test").into_result().is_ok());
+    assert!(parser().parse("testtest").into_result().is_err());
   }
 }
