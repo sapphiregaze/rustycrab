@@ -28,16 +28,15 @@ jobs:
           sudo apt-get install -y mold clang
 
       - name: Setup Rust toolchain
-        run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+        run: rustup toolchain install ${{ matrix.toolchain }}
 
       - name: Set RUSTFLAGS for Mold linker
         run: echo "RUSTFLAGS=-C linker=clang -C link-arg=-fuse-ld=$(which mold)" >> $GITHUB_ENV
 
-      - name: Cargo clippy
-        run: cargo clippy -- -D warnings
+      - uses: Swatinem/rust-cache@v2
 
-      - name: Cargo build
-        run: cargo build --verbose
-
-      - name: Cargo test
-        run: cargo test --verbose
+      - run: |
+        cargo fmt --check
+        cargo build --verbose
+        cargo clippy -- -D warnings
+        cargo test --verbose
