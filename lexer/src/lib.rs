@@ -1,6 +1,68 @@
-use logos::Lexer;
 use logos::Logos;
 use logos::Skip;
+
+/// A wrapper around a [`logos::Lexer`] that provides an iterator with
+/// consistent error handling.
+///
+/// The [`Lexer`] struct encapsulates the underlying Logos lexer for a given
+/// source string and exposes an iterator of `Result<Token, LexingError>`.
+///
+/// # Examples
+///
+/// ```
+/// use lexer::Lexer;
+/// let mut lexer = Lexer::new("foo bar");
+/// for result in lexer.iter() {
+///     match result {
+///         Ok(token) => println!("Token: {:?}", token),
+///         Err(e) => eprintln!("Lexing error: {:?}", e),
+///     }
+/// }
+/// ```
+#[derive(Debug)]
+pub struct Lexer<'src> {
+    inner: logos::Lexer<'src, Token>,
+}
+
+impl<'src> Lexer<'src> {
+    /// Creates a new [`Lexer`] from a source string slice.
+    ///
+    /// This initializes the internal Logos lexer and prepares it to
+    /// produce tokens from the provided input.
+    pub fn new(src: &'src str) -> Self {
+        Self {
+            inner: Token::lexer(src),
+        }
+    }
+
+    /// Returns an iterator over the tokens produced by the lexer.
+    ///
+    /// Each item in the iterator is a `Result<Token, LexingError>`, where:
+    /// - `Ok(Token)` represents a successfully parsed token.
+    /// - `Err(LexingError)` represents an error encountered during lexing.
+    ///
+    /// The iterator borrows `self` mutably, as the underlying [`logos::Lexer`]
+    /// maintains internal state during iteration.
+    pub fn iter(&mut self) -> impl Iterator<Item = Result<Token, LexingError>> + '_ {
+        std::iter::from_fn(move || {
+            let tok_res = self.inner.next()?;
+            let res = match tok_res {
+                Ok(Token::Err(e)) => Err(e),
+                Ok(t) => Ok(t),
+                Err(e) => Err(e),
+            };
+            Some(res)
+        })
+    }
+
+    /// Collects all tokens from the lexer into a vector.
+    ///
+    /// This method consumes the underlying lexer state to produce a `Vec`
+    /// containing the results of all lexing operations in sequence.
+    pub fn collect_all(&mut self) -> Vec<Result<Token, LexingError>> {
+        self.iter().collect()
+    }
+}
 
 /// Holds additional metadata for each token.
 ///
@@ -58,7 +120,7 @@ impl LexingError {
     ///
     /// This function extracts the first character of the current token slice
     /// and wraps it in the [`LexingError::UnexpectedCharacter`] variant.
-    fn from_lexer(lex: &mut Lexer<Token>) -> Self {
+    fn from_lexer(lex: &mut logos::Lexer<Token>) -> Self {
         LexingError::UnexpectedCharacter(lex.slice().chars().next().unwrap())
     }
 }
@@ -67,7 +129,7 @@ impl LexingError {
 ///
 /// Increments the line counter and updates the column to the end of the line.
 /// Returns [`Skip`] to ignore the newline token itself.
-fn newline_callback(lex: &mut Lexer<Token>) -> Skip {
+fn newline_callback(lex: &mut logos::Lexer<Token>) -> Skip {
     lex.extras.line += 1;
     lex.extras.column = lex.span().end;
     Skip
@@ -79,7 +141,7 @@ fn newline_callback(lex: &mut Lexer<Token>) -> Skip {
 /// - the lexeme string
 /// - current line
 /// - column (calculated relative to last newline)
-fn token_callback(lex: &mut Lexer<Token>) -> Extras {
+fn token_callback(lex: &mut logos::Lexer<Token>) -> Extras {
     let lexeme = lex.slice().trim().to_string();
     let line = lex.extras.line;
     let column = lex.span().start.saturating_sub(lex.extras.column) + 1;
@@ -93,7 +155,7 @@ fn token_callback(lex: &mut Lexer<Token>) -> Extras {
 /// Handles multi-line comments.
 ///
 /// Updates line and column tracking appropriately, and skips the comment token.
-fn comment_callback(lex: &mut Lexer<Token>) -> Skip {
+fn comment_callback(lex: &mut logos::Lexer<Token>) -> Skip {
     let slice = lex.slice();
     let newlines = slice.matches('\n').count();
     lex.extras.line += newlines;
@@ -111,7 +173,7 @@ fn comment_callback(lex: &mut Lexer<Token>) -> Skip {
 ///
 /// This allows the lexer to flag unexpanded or unsupported preprocessor
 /// directives instead of silently skipping them.
-fn preprocessor_callback(lex: &mut Lexer<Token>) -> LexingError {
+fn preprocessor_callback(lex: &mut logos::Lexer<Token>) -> LexingError {
     let directive = lex.slice().trim().to_string();
     LexingError::UnprocessedDirective(directive)
 }
@@ -384,14 +446,12 @@ mod tests {
 
     use super::*;
 
-    fn lex_to_tokens(input: &str) -> Vec<Token> {
-        Token::lexer(input).filter_map(|res| res.ok()).collect()
-    }
-
     #[test]
     fn test_keywords() {
         let src = "int return float _Generic";
-        let tokens = lex_to_tokens(src);
+        let mut lexer = Lexer::new(src);
+        let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
+
         let expected: Vec<(&str, usize)> =
             vec![("int", 1), ("return", 5), ("float", 12), ("_Generic", 18)];
 
@@ -412,7 +472,8 @@ mod tests {
     #[test]
     fn test_identifiers() {
         let src = "foo _bar baz123";
-        let tokens = lex_to_tokens(src);
+        let mut lexer = Lexer::new(src);
+        let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
 
         let lexemes: Vec<String> = tokens
             .iter()
@@ -428,7 +489,8 @@ mod tests {
     #[test]
     fn test_integer_constants() {
         let src = "0 123 0xff 0755";
-        let tokens = lex_to_tokens(src);
+        let mut lexer = Lexer::new(src);
+        let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
 
         let lexemes: Vec<String> = tokens
             .iter()
@@ -444,7 +506,8 @@ mod tests {
     #[test]
     fn test_float_constants() {
         let src = "1.23 4.5e6 0x1.8p1";
-        let tokens = lex_to_tokens(src);
+        let mut lexer = Lexer::new(src);
+        let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
 
         let lexemes: Vec<String> = tokens
             .iter()
@@ -460,7 +523,8 @@ mod tests {
     #[test]
     fn test_operators_and_characters() {
         let src = "+ - * / % ++ -- += -= == != <= >= && || ; , { }";
-        let tokens = lex_to_tokens(src);
+        let mut lexer = Lexer::new(src);
+        let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
 
         let lexemes: Vec<String> = tokens
             .iter()
@@ -500,7 +564,9 @@ mod tests {
     #[test]
     fn test_comments_and_line_tracking() {
         let src = "int a; // variable\n/* multi\nline comment */\nfloat b;";
-        let tokens = lex_to_tokens(src);
+        let mut lexer = Lexer::new(src);
+        let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
+
         let expected: Vec<(&str, usize, usize)> = vec![
             ("int", 1, 1),
             ("a", 1, 5),
@@ -529,23 +595,30 @@ mod tests {
 
     #[test]
     fn test_unprocessed_directive_error() {
-        let mut lexer = Token::lexer("#include <stdio.h>");
-        let token_opt = lexer.next();
+        let src = "#include <stdio.h>";
+        let mut lexer = Lexer::new(src);
+
+        let token_opt = lexer.iter().next();
         assert!(token_opt.is_some(), "Expected a token from the lexer");
 
         let token_res = token_opt.unwrap();
-        let err = token_res.ok().unwrap();
+        assert!(
+            token_res.is_err(),
+            "Expected an error for unprocessed directive"
+        );
+
+        let err = token_res.err().unwrap();
         assert_eq!(
             err,
-            Token::Err(LexingError::UnprocessedDirective(
-                "#include <stdio.h>".to_string()
-            ))
+            LexingError::UnprocessedDirective("#include <stdio.h>".to_string())
         );
     }
 
     #[test]
     fn test_unexpected_character_error() {
-        let mut lexer = Token::lexer("@");
+        let src = "@";
+        let mut lexer = Token::lexer(src);
+
         let token_opt = lexer.next();
         assert!(token_opt.is_some(), "Expected a token from the lexer");
 

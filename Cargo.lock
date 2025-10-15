@@ -267,7 +267,6 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "lexer",
- "logos",
  "tracing",
  "tracing-subscriber",
 ]

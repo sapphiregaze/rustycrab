@@ -6,8 +6,7 @@ use std::path::PathBuf;
 use std::process;
 
 use command::build_command;
-use lexer::Token;
-use logos::Logos;
+use lexer::Lexer;
 use tracing::debug;
 use tracing::error;
 use tracing_subscriber::EnvFilter;
@@ -39,17 +38,11 @@ fn main() {
         }
     };
 
-    let lex = Token::lexer(&src);
-    for tok_res in lex {
-        let res = match tok_res {
-            Ok(Token::Err(e)) => Err(e),
-            Ok(t) => Ok(t),
-            Err(e) => Err(e),
-        };
-
-        match res {
+    let mut lexer = Lexer::new(&src);
+    for result in lexer.iter() {
+        match result {
             Ok(token) => debug!("Token: {:?}", token),
-            Err(err) => error!("Lexing error: {:?}", err),
+            Err(e) => error!("Lexing Error: {:?}", e),
         }
     }
 }

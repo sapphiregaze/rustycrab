@@ -3,5 +3,4 @@ resolver = "3"
 members = [ "lexer" , "parser", "rustycrab" ]
 
 [workspace.dependencies]
-logos = "0.15.1"
 tracing = "0.1.41"
