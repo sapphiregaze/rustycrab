@@ -11,6 +11,5 @@ path = "src/main.rs"
 [dependencies]
 clap = "4.5.49"
 lexer = { path = "../lexer/" }
-logos.workspace = true
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 tracing.workspace = true
