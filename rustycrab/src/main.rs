@@ -40,7 +40,16 @@ fn main() {
     };
 
     let lex = Token::lexer(&src);
-    for tok in lex {
-        debug!("{:?}", tok);
+    for tok_res in lex {
+        let res = match tok_res {
+            Ok(Token::Err(e)) => Err(e),
+            Ok(t) => Ok(t),
+            Err(e) => Err(e),
+        };
+
+        match res {
+            Ok(token) => debug!("Token: {:?}", token),
+            Err(err) => error!("Lexing error: {:?}", err),
+        }
     }
 }
