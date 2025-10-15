@@ -1,6 +1,8 @@
-use logos::{Lexer, Logos, Skip};
+use logos::Lexer;
+use logos::Logos;
+use logos::Skip;
 
-/// `Extras` holds additional metadata for each token.
+/// Holds additional metadata for each token.
 ///
 /// This includes:
 /// - `lexeme`: the matched string slice from the source.
@@ -14,7 +16,7 @@ pub struct Extras {
 }
 
 impl Default for Extras {
-    /// Provides default values for `Extras`:
+    /// Provides default values for [`Extras`]:
     /// - `lexeme` is empty
     /// - `line` starts at 1
     /// - `column` starts at 0
@@ -27,24 +29,58 @@ impl Default for Extras {
     }
 }
 
+/// Represents possible errors that can occur during lexical analysis.
+///
+/// This enum covers unexpected characters, unprocessed preprocessor directives,
+/// and other miscellaneous lexing errors that do not fall into a specific
+/// category.
+#[derive(Default, Debug, Clone, PartialEq)]
+pub enum LexingError {
+    /// An unexpected or invalid character was encountered while lexing.
+    ///
+    /// This variant typically indicates a syntax error or unsupported symbol.
+    UnexpectedCharacter(char),
+
+    /// A preprocessor directive (e.g., `#include`, `#define`) was encountered.
+    ///
+    /// This is useful for detecting source code that still contains
+    /// unprocessed directives that should have been resolved before lexing.
+    UnprocessedDirective(String),
+
+    /// A generic fallback variant for unspecified or miscellaneous lexing
+    /// errors.
+    #[default]
+    Other,
+}
+
+impl LexingError {
+    /// Constructs a [`LexingError`] from the current lexer state.
+    ///
+    /// This function extracts the first character of the current token slice
+    /// and wraps it in the [`LexingError::UnexpectedCharacter`] variant.
+    fn from_lexer(lex: &mut Lexer<Token>) -> Self {
+        LexingError::UnexpectedCharacter(lex.slice().chars().next().unwrap())
+    }
+}
+
 /// Handles newline tokens (`\n`) in the source code.
 ///
 /// Increments the line counter and updates the column to the end of the line.
-/// Returns `Skip` to ignore the newline token itself.
+/// Returns [`Skip`] to ignore the newline token itself.
 fn newline_callback(lex: &mut Lexer<Token>) -> Skip {
     lex.extras.line += 1;
     lex.extras.column = lex.span().end;
     Skip
 }
 
-/// Generates an `Extras` instance for a matched token.
+/// Generates an [`Extras`] instance for a matched token.
 ///
 /// Captures:
 /// - the lexeme string
 /// - current line
 /// - column (calculated relative to last newline)
 fn token_callback(lex: &mut Lexer<Token>) -> Extras {
-    let lexeme = lex.slice().to_string();
+    let lexeme = lex.slice().trim().to_string();
     let line = lex.extras.line;
     let column = lex.span().start.saturating_sub(lex.extras.column) + 1;
     Extras {
@@ -67,14 +103,32 @@ fn comment_callback(lex: &mut Lexer<Token>) -> Skip {
     Skip
 }
 
+/// Callback for handling unprocessed preprocessor directives.
+///
+/// This function is used by the lexer when it matches a token that begins with
+/// `#`. It captures the entire directive text and returns it as a
+/// [`LexingError::UnprocessedDirective`].
+///
+/// This allows the lexer to flag unexpanded or unsupported preprocessor
+/// directives instead of silently skipping them.
+fn preprocessor_callback(lex: &mut Lexer<Token>) -> LexingError {
+    let directive = lex.slice().trim().to_string();
+    LexingError::UnprocessedDirective(directive)
+}
+
 /// Tokens for the C syntax.
 ///
-/// Uses the `Extras` struct to track line, column, and lexeme metadata.
-/// Includes keywords, identifiers, constants, operators, punctuation, and comments.
+/// Uses the [`Extras`] struct to track line, column, and lexeme metadata.
+/// Includes keywords, identifiers, constants, operators, punctuation, and
+/// comments.
+///
+/// Any unidentified character would result in a
+/// [`LexingError::UnexpectedCharacter`].
 #[derive(Logos, Debug, PartialEq)]
 #[logos(extras = Extras)]
 #[logos(skip(r"\n", newline_callback))]
 #[logos(skip r"[ \t\v\f]")]
+#[logos(error(LexingError, LexingError::from_lexer))]
 pub enum Token {
     // === Keywords ===
     #[token("auto", token_callback)]
@@ -314,12 +368,21 @@ pub enum Token {
     )]
     #[regex(r"//[^\n]*", logos::skip)]
     Comment,
+
+    // === Errors ===
+    // Handles lexing errors related to the lack of preprocessing.
+    #[regex(
+        r"#\s*(assert|define|elif|else|endif|error|ident|if|ifdef|ifndef|import|include|include_next|line|pragma|sccs|unassert|undef|warning)[^\n]*",
+        preprocessor_callback
+    )]
+    Err(LexingError),
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use logos::Logos;
+
+    use super::*;
 
     fn lex_to_tokens(input: &str) -> Vec<Token> {
         Token::lexer(input).filter_map(|res| res.ok()).collect()
@@ -462,5 +525,37 @@ mod tests {
         }
 
         assert_eq!(tokens.len(), expected.len());
+    }
+
+    #[test]
+    fn test_unprocessed_directive_error() {
+        let mut lexer = Token::lexer("#include <stdio.h>");
+        let token_opt = lexer.next();
+        assert!(token_opt.is_some(), "Expected a token from the lexer");
+
+        let token_res = token_opt.unwrap();
+        let err = token_res.ok().unwrap();
+        assert_eq!(
+            err,
+            Token::Err(LexingError::UnprocessedDirective(
+                "#include <stdio.h>".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_unexpected_character_error() {
+        let mut lexer = Token::lexer("@");
+        let token_opt = lexer.next();
+        assert!(token_opt.is_some(), "Expected a token from the lexer");
+
+        let token_res = token_opt.unwrap();
+        assert!(
+            token_res.is_err(),
+            "Expected an error for unexpected character"
+        );
+
+        let err = token_res.err().unwrap();
+        assert_eq!(err, LexingError::UnexpectedCharacter('@'));
     }
 }

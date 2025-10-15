@@ -1,0 +1,42 @@
+name: Build, Lint, & Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build_and_test:
+    name: rc
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - nightly-2025-10-11
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        run: rustup toolchain install ${{ matrix.toolchain }}
+
+      - uses: rui314/setup-mold@v1
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Cargo fmt check
+        run: cargo fmt --check
+
+      - name: Cargo build
+        run: cargo build --verbose
+
+      - name: Cargo clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Cargo test
+        run: cargo test --verbose
