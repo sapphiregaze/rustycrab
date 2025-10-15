@@ -1,4 +1,6 @@
-use logos::{Lexer, Logos, Skip};
+use logos::Lexer;
+use logos::Logos;
+use logos::Skip;
 
 /// `Extras` holds additional metadata for each token.
 ///
@@ -70,7 +72,8 @@ fn comment_callback(lex: &mut Lexer<Token>) -> Skip {
 /// Tokens for the C syntax.
 ///
 /// Uses the `Extras` struct to track line, column, and lexeme metadata.
-/// Includes keywords, identifiers, constants, operators, punctuation, and comments.
+/// Includes keywords, identifiers, constants, operators, punctuation, and
+/// comments.
 #[derive(Logos, Debug, PartialEq)]
 #[logos(extras = Extras)]
 #[logos(skip(r"\n", newline_callback))]
@@ -318,8 +321,9 @@ pub enum Token {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use logos::Logos;
+
+    use super::*;
 
     fn lex_to_tokens(input: &str) -> Vec<Token> {
         Token::lexer(input).filter_map(|res| res.ok()).collect()

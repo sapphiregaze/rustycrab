@@ -37,6 +37,7 @@
             cargo-edit
             cargo-watch
             rust-analyzer
+            mold
           ];
 
           env = {
