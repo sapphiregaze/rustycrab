@@ -22,16 +22,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mold clang
-
       - name: Setup Rust toolchain
         run: rustup toolchain install ${{ matrix.toolchain }}
 
-      - name: Set RUSTFLAGS for Mold linker
-        run: echo "RUSTFLAGS=-C linker=clang -C link-arg=-fuse-ld=$(which mold)" >> $GITHUB_ENV
+      - uses: rui314/setup-mold@v1
 
       - uses: Swatinem/rust-cache@v2
 
