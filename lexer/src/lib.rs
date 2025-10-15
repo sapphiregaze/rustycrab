@@ -10,6 +10,7 @@ use logos::Skip;
 /// # Examples
 ///
 /// ```
+/// use lexer::Lexer;
 /// let mut lexer = Lexer::new("foo bar");
 /// for result in lexer.iter() {
 ///     match result {
@@ -445,14 +446,12 @@ mod tests {
 
     use super::*;
 
-    fn lex_to_tokens(input: &str) -> Vec<Token> {
-        Token::lexer(input).filter_map(|res| res.ok()).collect()
-    }
-
     #[test]
     fn test_keywords() {
         let src = "int return float _Generic";
-        let tokens = lex_to_tokens(src);
+        let mut lexer = Lexer::new(src);
+        let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
+
         let expected: Vec<(&str, usize)> =
             vec![("int", 1), ("return", 5), ("float", 12), ("_Generic", 18)];
 
@@ -473,7 +472,8 @@ mod tests {
     #[test]
     fn test_identifiers() {
         let src = "foo _bar baz123";
-        let tokens = lex_to_tokens(src);
+        let mut lexer = Lexer::new(src);
+        let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
 
         let lexemes: Vec<String> = tokens
             .iter()
@@ -489,7 +489,8 @@ mod tests {
     #[test]
     fn test_integer_constants() {
         let src = "0 123 0xff 0755";
-        let tokens = lex_to_tokens(src);
+        let mut lexer = Lexer::new(src);
+        let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
 
         let lexemes: Vec<String> = tokens
             .iter()
@@ -505,7 +506,8 @@ mod tests {
     #[test]
     fn test_float_constants() {
         let src = "1.23 4.5e6 0x1.8p1";
-        let tokens = lex_to_tokens(src);
+        let mut lexer = Lexer::new(src);
+        let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
 
         let lexemes: Vec<String> = tokens
             .iter()
@@ -521,7 +523,8 @@ mod tests {
     #[test]
     fn test_operators_and_characters() {
         let src = "+ - * / % ++ -- += -= == != <= >= && || ; , { }";
-        let tokens = lex_to_tokens(src);
+        let mut lexer = Lexer::new(src);
+        let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
 
         let lexemes: Vec<String> = tokens
             .iter()
@@ -561,7 +564,9 @@ mod tests {
     #[test]
     fn test_comments_and_line_tracking() {
         let src = "int a; // variable\n/* multi\nline comment */\nfloat b;";
-        let tokens = lex_to_tokens(src);
+        let mut lexer = Lexer::new(src);
+        let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
+
         let expected: Vec<(&str, usize, usize)> = vec![
             ("int", 1, 1),
             ("a", 1, 5),
@@ -590,23 +595,30 @@ mod tests {
 
     #[test]
     fn test_unprocessed_directive_error() {
-        let mut lexer = Token::lexer("#include <stdio.h>");
-        let token_opt = lexer.next();
+        let src = "#include <stdio.h>";
+        let mut lexer = Lexer::new(src);
+
+        let token_opt = lexer.iter().next();
         assert!(token_opt.is_some(), "Expected a token from the lexer");
 
         let token_res = token_opt.unwrap();
-        let err = token_res.ok().unwrap();
+        assert!(
+            token_res.is_err(),
+            "Expected an error for unprocessed directive"
+        );
+
+        let err = token_res.err().unwrap();
         assert_eq!(
             err,
-            Token::Err(LexingError::UnprocessedDirective(
-                "#include <stdio.h>".to_string()
-            ))
+            LexingError::UnprocessedDirective("#include <stdio.h>".to_string())
         );
     }
 
     #[test]
     fn test_unexpected_character_error() {
-        let mut lexer = Token::lexer("@");
+        let src = "@";
+        let mut lexer = Token::lexer(src);
+
         let token_opt = lexer.next();
         assert!(token_opt.is_some(), "Expected a token from the lexer");
 
