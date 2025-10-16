@@ -65,10 +65,36 @@ pub fn parser<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  constant()
+  let left_paren = select! {
+    Token::LParen(_) => (),
+  };
+
+  let right_paren = select! {
+    Token::RParen(_) => (),
+  };
+
+  select! {
+    Token::Identifier(extra) => (Node::Identifier(extra.lexeme.clone()), span_from_extra(extra)),
+  }
+    .or(constant())
     .or(string())
+    .or(expression().delimited_by(left_paren, right_paren))
     .repeated()
     .collect()
+}
+
+fn expression<'tokens, 'src: 'tokens, I>(
+) -> impl Parser<'tokens, I, Spanned<Node>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token, Span = Span>,
+{
+  // TODO make these lines a lot shorter
+  select! {
+    Token::IntegerConstant(extra) => (Node::IntegerConstant(extra.lexeme.parse::<i32>().unwrap()), span_from_extra(extra)),
+    Token::FloatConstant(extra) => (Node::FloatConstant(extra.lexeme.parse::<f32>().unwrap()), span_from_extra(extra)),
+    // TODO find some way to do a type check to see if identifier is enum constant?
+    // Token::Identifier(extra) => (Node::EnumerationConstant(extra.lexeme.clone()), span_from_extra(extra)),
+  }
 }
 
 fn constant<'tokens, 'src: 'tokens, I>(
