@@ -5,9 +5,10 @@ use std::fs;
 use std::path::PathBuf;
 use std::process;
 
+use chumsky::Parser;
 use command::build_command;
 use lexer::Lexer;
-use chumsky::Parser;
+use lexer::Token;
 use parser::parser;
 
 use tracing::debug;
@@ -16,12 +17,6 @@ use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
 
 fn main() {
-    // Our parser expects empty strings, so this should parse successfully
-    println!("{:?}", parser().parse("test").into_result());
-
-    // Anything other than an empty string should produce an error
-    println!("{:?}", parser().parse("testtest").into_result());
-
     let mut command = build_command();
 
     if env::args().len() == 1 {
@@ -48,10 +43,11 @@ fn main() {
     };
 
     let mut lexer = Lexer::new(&src);
-    for result in lexer.iter() {
-        match result {
-            Ok(token) => debug!("Token: {:?}", token),
-            Err(e) => error!("Lexing Error: {:?}", e),
-        }
-    }
+    let tokens: Vec<Token> = lexer.iter().map(|result| result.unwrap()).collect();
+
+    let result = parser().parse(
+      tokens.as_slice()
+    );
+
+    println!("{:?}", result);
 }

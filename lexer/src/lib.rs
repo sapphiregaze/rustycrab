@@ -70,7 +70,7 @@ impl<'src> Lexer<'src> {
 /// - `lexeme`: the matched string slice from the source.
 /// - `line`: the current line number in the source code.
 /// - `column`: the column position where the token starts.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Extras {
     pub lexeme: String,
     pub line: usize,
@@ -186,7 +186,7 @@ fn preprocessor_callback(lex: &mut logos::Lexer<Token>) -> LexingError {
 ///
 /// Any unidentified character would result in a
 /// [`LexingError::UnexpectedCharacter`].
-#[derive(Logos, Debug, PartialEq)]
+#[derive(Logos, Debug, Clone, PartialEq)]
 #[logos(extras = Extras)]
 #[logos(skip(r"\n", newline_callback))]
 #[logos(skip r"[ \t\v\f]")]
