@@ -43,10 +43,18 @@ fn main() {
     };
 
     let mut lexer = Lexer::new(&src);
-    let tokens: Vec<Token> = lexer.iter().map(|result| result.unwrap()).collect();
+    let tokens = lexer.collect_all();
+    for result in tokens.clone() {
+        match result {
+            Ok(token) => debug!("Token: {:?}", token),
+            Err(e) => error!("Lexing Error: {:?}", e),
+        }
+    }
+
+    let input: Vec<Token> = tokens.iter().map(|result| result.clone().unwrap()).collect();
 
     let result = parser().parse(
-      tokens.as_slice()
+      input.as_slice()
     );
 
     println!("{:?}", result);
