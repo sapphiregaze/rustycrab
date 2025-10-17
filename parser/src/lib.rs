@@ -184,6 +184,8 @@ token_parser!(left_bracket, Token::LBracket);
 token_parser!(right_bracket, Token::RBracket);
 token_parser!(left_brace, Token::LBrace);
 token_parser!(right_brace, Token::RBrace);
+token_parser!(left_op, Token::LeftOp);
+token_parser!(right_op, Token::RightOp);
 token_parser!(dot, Token::Dot);
 token_parser!(amp, Token::Amp);
 token_parser!(star, Token::Star);
@@ -195,8 +197,12 @@ token_parser!(tilde, Token::Tilde);
 token_parser!(bang, Token::Bang);
 token_parser!(slash, Token::Slash);
 token_parser!(percent, Token::Percent);
+token_parser!(eq, Token::EqOp);
+token_parser!(ne, Token::NeOp);
 token_parser!(lt, Token::Lt);
 token_parser!(gt, Token::Gt);
+token_parser!(lte, Token::LeOp);
+token_parser!(gte, Token::GeOp);
 token_parser!(caret, Token::Caret);
 token_parser!(pipe, Token::Pipe);
 token_parser!(question, Token::Question);
@@ -513,7 +519,31 @@ fn additive_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|additive| {
+    choice((
+      multiplicative_expression(),
+      additive.clone()
+        .then_ignore(plus())
+        .then(multiplicative_expression())
+        .map(|((add_expr, add_span), (mult_expr, _mult_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::Add, 
+            left: Box::new(add_expr), 
+            right: Box::new(mult_expr) 
+          }, add_span)
+        }),
+      additive.clone()
+        .then_ignore(minus())
+        .then(multiplicative_expression())
+        .map(|((add_expr, add_span), (mult_expr, _mult_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::Sub, 
+            left: Box::new(add_expr), 
+            right: Box::new(mult_expr) 
+          }, add_span)
+        }),
+    ))
+  })
 }
 
 fn shift_expression<'tokens, 'src: 'tokens, I>(
@@ -521,7 +551,31 @@ fn shift_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|shift| {
+    choice((
+      additive_expression(),
+      shift.clone()
+        .then_ignore(left_op())
+        .then(additive_expression())
+        .map(|((shift_expr, shift_span), (add_expr, _add_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::ShiftLeft, 
+            left: Box::new(shift_expr), 
+            right: Box::new(add_expr) 
+          }, shift_span)
+        }),
+      shift.clone()
+        .then_ignore(right_op())
+        .then(additive_expression())
+        .map(|((shift_expr, shift_span), (add_expr, _add_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::ShiftRight, 
+            left: Box::new(shift_expr), 
+            right: Box::new(add_expr) 
+          }, shift_span)
+        }),
+    ))
+  })
 }
 
 fn relational_expression<'tokens, 'src: 'tokens, I>(
@@ -529,7 +583,51 @@ fn relational_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|relational| {
+    choice((
+      shift_expression(),
+      relational.clone()
+        .then_ignore(lt())
+        .then(shift_expression())
+        .map(|((rel_expr, rel_span), (shift_expr, _shift_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::LessThan, 
+            left: Box::new(rel_expr), 
+            right: Box::new(shift_expr) 
+          }, rel_span)
+        }),
+      relational.clone()
+        .then_ignore(gt())
+        .then(shift_expression())
+        .map(|((rel_expr, rel_span), (shift_expr, _shift_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::GreaterThan, 
+            left: Box::new(rel_expr), 
+            right: Box::new(shift_expr) 
+          }, rel_span)
+        }),
+      relational.clone()
+        .then_ignore(lte())
+        .then(shift_expression())
+        .map(|((rel_expr, rel_span), (shift_expr, _shift_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::LessEqual, 
+            left: Box::new(rel_expr), 
+            right: Box::new(shift_expr) 
+          }, rel_span)
+        }),
+      relational.clone()
+        .then_ignore(gte())
+        .then(shift_expression())
+        .map(|((rel_expr, rel_span), (shift_expr, _shift_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::GreaterEqual, 
+            left: Box::new(rel_expr), 
+            right: Box::new(shift_expr) 
+          }, rel_span)
+        }),
+    ))
+  })
 }
 
 fn equality_expression<'tokens, 'src: 'tokens, I>(
@@ -537,7 +635,31 @@ fn equality_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|equality| {
+    choice((
+      relational_expression(),
+      equality.clone()
+        .then_ignore(eq())
+        .then(relational_expression())
+        .map(|((eq_expr, eq_span), (rel_expr, _rel_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::Equal, 
+            left: Box::new(eq_expr), 
+            right: Box::new(rel_expr) 
+          }, eq_span)
+        }),
+      equality.clone()
+        .then_ignore(ne())
+        .then(relational_expression())
+        .map(|((eq_expr, eq_span), (rel_expr, _rel_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::NotEqual, 
+            left: Box::new(eq_expr), 
+            right: Box::new(rel_expr) 
+          }, eq_span)
+        }),
+    ))
+  })
 }
 
 fn and_expression<'tokens, 'src: 'tokens, I>(
