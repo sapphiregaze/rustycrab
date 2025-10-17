@@ -50,10 +50,10 @@ pub enum Expr {
         member: String,
     },
     Cast {
-        type_name: TypeName,  // Changed from Token - should be a proper type representation
+        type_name: TypeName,
         expr: Box<Expr>,
     },
-    SizeofType(TypeName),     // Changed from Token
+    SizeofType(TypeName),
     SizeofExpr(Box<Expr>),
     TernaryOp {
         condition: Box<Expr>,
@@ -61,7 +61,7 @@ pub enum Expr {
         else_expr: Box<Expr>,
     },
     Assignment {
-        op: AssignmentOperator,  // Changed from Token
+        op: AssignmentOperator,
         lvalue: Box<Expr>,
         rvalue: Box<Expr>,
     },
@@ -248,12 +248,10 @@ where
 {
     select! {
         Token::IntegerConstant(extra) => {
-            // Parse as i64 to handle larger constants, or use i32 if that's your target
             let value = extra.lexeme.parse::<i32>().unwrap();
             (Expr::IntLiteral(value), span_from_extra(extra))
         },
         Token::FloatConstant(extra) => {
-            // Use f64 for better precision, or f32 if that's your target
             let value = extra.lexeme.parse::<f32>().unwrap();
             (Expr::FloatLiteral(value), span_from_extra(extra))
         },
@@ -373,7 +371,10 @@ fn argument_expression_list<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+    assignment_expression()
+      .separated_by(comma())
+      .at_least(1)
+      .collect()
 }
 
 fn unary_expression<'tokens, 'src: 'tokens, I>(
@@ -381,15 +382,65 @@ fn unary_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|unary| {
+    choice((
+      postfix_expression(),
+      
+      // preincrement
+      inc()
+        .ignore_then(unary.clone())
+        .map(|(unary, unary_span)| {
+          (Expr::UnaryOp { 
+            op: UnaryOperator::PreIncrement, 
+            operand: Box::new(unary)
+          }, unary_span)
+        }),
 
+      // predecrement
+      dec()
+        .ignore_then(unary.clone())
+        .map(|(unary, unary_span)| {
+          (Expr::UnaryOp { 
+            op: UnaryOperator::PreDecrement, 
+            operand: Box::new(unary)
+          }, unary_span)
+        }),
+      
+      // cast expression
+      unary_operator()
+        .then(cast_expression())
+        .map(|((unary_op, unary_op_span), (cast, _cast_span))| {
+          if let Expr::Cast{type_name, expr} = cast {
+            (Expr::UnaryOp { 
+              op: unary_op, 
+              operand: Box::new(Expr::Cast { 
+                type_name: type_name, 
+                expr: expr
+              })
+            }, unary_op_span)
+          } else {
+            panic!("expected Cast expr!")
+          }
+        }),
+
+      // TODO SIZEOF and ALIGNOF
+    ))
+  })
 }
 
 fn unary_operator<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<UnaryOperator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  select! {
+    Token::Amp(extra) => (UnaryOperator::AddressOf, span_from_extra(extra)),
+    Token::Star(extra) => (UnaryOperator::Dereference, span_from_extra(extra)),
+    Token::Plus(extra) => (UnaryOperator::Plus, span_from_extra(extra)),
+    Token::Minus(extra) => (UnaryOperator::Minus, span_from_extra(extra)),
+    Token::Tilde(extra) => (UnaryOperator::BitwiseNot, span_from_extra(extra)),
+    Token::Bang(extra) => (UnaryOperator::LogicalNot, span_from_extra(extra)),
+  }
 }
 
 fn cast_expression<'tokens, 'src: 'tokens, I>(
@@ -919,8 +970,6 @@ where
 {
   
 }
-
-
 
 fn span_from_extra(extra: Extras) -> Span {
   Span::new((), extra.column..extra.column+extra.lexeme.len())
