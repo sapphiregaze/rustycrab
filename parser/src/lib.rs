@@ -4,77 +4,464 @@ use lexer::*;
 pub type Span = SimpleSpan;
 pub type Spanned<T> = (T, Span);
 
-#[derive(Clone, Debug)]
+// ============================================================================
+// AST Node Types
+// ============================================================================
+
+/// A translation unit (C source file) is a list of external declarations
+pub type TranslationUnit = Vec<ExternalDecl>;
+
+/// Top-level declarations (functions, global variables, etc.)
+#[derive(Debug, Clone)]
+pub enum ExternalDecl {
+    FuncDef(FunctionDefinition),
+    Decl(Declaration),
+}
+
+/// Function definition
+#[derive(Debug, Clone)]
+pub struct FunctionDefinition {
+    pub specifiers: Vec<DeclarationSpecifier>,
+    pub declarator: Declarator,
+    pub body: CompoundStmt,
+}
+
+// ============================================================================
+// Statements
+// ============================================================================
+
+#[derive(Debug, Clone)]
+pub enum Stmt {
+    /// Labeled statement: label: stmt
+    Labeled {
+        label: String,
+        stmt: Box<Stmt>,
+    },
+    /// Case label: case expr: stmt
+    Case {
+        expr: Expr,
+        stmt: Box<Stmt>,
+    },
+    /// Default label: default: stmt
+    Default(Box<Stmt>),
+    
+    /// Compound statement: { ... }
+    Compound(CompoundStmt),
+    
+    /// Expression statement: expr;
+    Expr(Option<Expr>),  // None for empty statement (just semicolon)
+    
+    /// If statement
+    If {
+        condition: Expr,
+        then_stmt: Box<Stmt>,
+        else_stmt: Option<Box<Stmt>>,
+    },
+    
+    /// Switch statement
+    Switch {
+        condition: Expr,
+        body: Box<Stmt>,
+    },
+    
+    /// While loop
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
+    },
+    
+    /// Do-while loop
+    DoWhile {
+        body: Box<Stmt>,
+        condition: Expr,
+    },
+    
+    /// For loop
+    For {
+        init: Option<ForInit>,
+        condition: Option<Expr>,
+        increment: Option<Expr>,
+        body: Box<Stmt>,
+    },
+    
+    /// Goto statement
+    Goto(String),
+    
+    /// Continue statement
+    Continue,
+    
+    /// Break statement
+    Break,
+    
+    /// Return statement
+    Return(Option<Expr>),
+}
+
+/// Compound statement (block)
+#[derive(Debug, Clone)]
+pub struct CompoundStmt {
+    pub items: Vec<BlockItem>,
+}
+
+/// Block item (can be declaration or statement)
+#[derive(Debug, Clone)]
+pub enum BlockItem {
+    Decl(Declaration),
+    Stmt(Stmt),
+}
+
+/// For loop initializer (can be expression or declaration in C99+)
+#[derive(Debug, Clone)]
+pub enum ForInit {
+    Expr(Expr),
+    Decl(Declaration),
+}
+
+// ============================================================================
+// Declarations
+// ============================================================================
+
+/// Declaration: specifiers + list of declarators
+#[derive(Debug, Clone)]
+pub struct Declaration {
+    pub specifiers: Vec<DeclarationSpecifier>,
+    pub declarators: Vec<InitDeclarator>,
+}
+
+/// Declarator with optional initializer
+#[derive(Debug, Clone)]
+pub struct InitDeclarator {
+    pub declarator: Declarator,
+    pub initializer: Option<Initializer>,
+}
+
+/// Declaration specifiers (storage class, type qualifiers, type specifiers)
+#[derive(Debug, Clone)]
+pub enum DeclarationSpecifier {
+    StorageClass(Option<StorageClass>),
+    TypeQualifier(Option<TypeQualifier>),
+    TypeSpecifier(Option<TypeSpecifier>),
+    FunctionSpecifier(Option<FunctionSpecifier>),  // inline
+}
+
+/// Storage class specifiers
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StorageClass {
+    Auto,
+    Register,
+    Static,
+    Extern,
+    Typedef,
+}
+
+/// Type qualifiers
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypeQualifier {
+    Const,
+    Volatile,
+    Restrict,  // C99
+}
+
+/// Function specifiers
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionSpecifier {
+    Inline,
+}
+
+/// Type specifiers
+#[derive(Debug, Clone)]
+pub enum TypeSpecifier {
+    Void,
+    Char,
+    Short,
+    Int,
+    Long,
+    Float,
+    Double,
+    Signed,
+    Unsigned,
+    Bool,      // C99 _Bool
+    Complex,   // C99 _Complex
+    
+    // Struct or union
+    Struct(StructOrUnion),
+    
+    // Enum
+    Enum(EnumSpecifier),
+    
+    // Typedef name
+    TypedefName(String),
+}
+
+// Type qualifier or type specifier
+pub enum TypeQualOrSpec {
+  Qualifier(Option<TypeQualifier>),
+  Specifier(Option<TypeSpecifier>),
+}
+
+/// Struct or union specifier
+#[derive(Debug, Clone)]
+pub struct StructOrUnion {
+    pub kind: StructOrUnionKind,
+    pub name: Option<String>,
+    pub declarations: Option<Vec<StructDeclaration>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StructOrUnionKind {
+    Struct,
+    Union,
+}
+
+/// Struct declaration (member)
+#[derive(Debug, Clone)]
+pub struct StructDeclaration {
+    pub specifiers: Vec<TypeSpecifier>,  // Simplified
+    pub declarators: Vec<StructDeclarator>,
+}
+
+/// Struct declarator (member with optional bit-field)
+#[derive(Debug, Clone)]
+pub struct StructDeclarator {
+    pub declarator: Declarator,
+    pub bit_field: Option<Expr>,  // For bit-fields: int x : 5;
+}
+
+/// Enum specifier
+#[derive(Debug, Clone)]
+pub struct EnumSpecifier {
+    pub name: Option<String>,
+    pub enumerators: Option<Vec<Enumerator>>,
+}
+
+/// Enumerator (enum constant)
+#[derive(Debug, Clone)]
+pub struct Enumerator {
+    pub name: String,
+    pub value: Option<Expr>,  // Optional: ENUM_VAL = 42
+}
+
+// ============================================================================
+// Declarators
+// ============================================================================
+
+/// Declarator (describes how to declare a variable/function)
+#[derive(Debug, Clone)]
+pub struct Declarator {
+    pub pointer: Option<Pointer>,
+    pub direct_declarator: DirectDeclarator,
+}
+
+/// Pointer (can be chained: **p)
+#[derive(Debug, Clone)]
+pub struct Pointer {
+    pub qualifiers: Vec<TypeQualifier>,
+    pub next: Option<Box<Pointer>>,
+}
+
+/// Direct declarator
+#[derive(Debug, Clone)]
+pub enum DirectDeclarator {
+    /// Identifier: x
+    Identifier(String),
+    
+    /// Parenthesized declarator: (declarator)
+    Declarator(Box<Declarator>),
+    
+    /// Array: declarator[expr]
+    Array {
+        declarator: Box<DirectDeclarator>,
+        size: Option<Expr>,
+    },
+    
+    /// Function: declarator(params)
+    Function {
+        declarator: Box<DirectDeclarator>,
+        params: ParameterList,
+    },
+}
+
+/// Parameter list for function declarations
+#[derive(Debug, Clone)]
+pub struct ParameterList {
+    pub params: Vec<ParameterDeclaration>,
+    pub variadic: bool,  // true for ... (varargs)
+}
+
+/// Parameter declaration
+#[derive(Debug, Clone)]
+pub struct ParameterDeclaration {
+    pub specifiers: Vec<DeclarationSpecifier>,
+    pub declarator: Option<Declarator>,  // Can be abstract (unnamed)
+}
+
+// ============================================================================
+// Initializers
+// ============================================================================
+
+/// Initializer
+#[derive(Debug, Clone)]
+pub enum Initializer {
+    /// Single expression: = 5
+    Expr(Expr),
+    
+    /// List of initializers: = {1, 2, 3}
+    List(Vec<InitializerListItem>),
+}
+
+/// Initializer list item (with optional designation for C99)
+#[derive(Debug, Clone)]
+pub struct InitializerListItem {
+    pub designation: Option<Designation>,
+    pub initializer: Initializer,
+}
+
+/// Designation (for designated initializers in C99)
+#[derive(Debug, Clone)]
+pub struct Designation {
+    pub designators: Vec<Designator>,
+}
+
+/// Designator
+#[derive(Debug, Clone)]
+pub enum Designator {
+    /// Array index: [5]
+    Index(Expr),
+    
+    /// Struct member: .field
+    Member(String),
+}
+
+// ============================================================================
+// Expressions
+// ============================================================================
+
+#[derive(Debug, Clone)]
 pub enum Expr {
     // Literals - values known at compile time
-    IntLiteral(i32),      // Changed from i32 to handle larger constants
-    FloatLiteral(f32),    // Changed from f32 for better precision
+    IntLiteral(i32),
+    FloatLiteral(f32),
     StringLiteral(String),
     CharLiteral(char),
     
     // Variable access - needs symbol lookup
     Identifier(String),
     
-    // Binary/unary operations - use dedicated enums instead of Token
+    // Binary operations
     BinaryOp {
-        op: BinaryOperator,  // Changed from Token
+        op: BinaryOperator,
         left: Box<Expr>,
         right: Box<Expr>,
     },
+    
+    // Unary operations (prefix)
     UnaryOp {
-        op: UnaryOperator,   // Changed from Token
+        op: UnaryOperator,
         operand: Box<Expr>,
     },
     
-    // Postfix operations (separate from UnaryOp)
+    // Postfix operations
     PostfixOp {
         op: PostfixOperator,
         operand: Box<Expr>,
     },
     
-    // Other expression types
-    FunctionCall {
-        function: Box<Expr>,
-        args: Vec<Box<Expr>>,
-    },
+    // Array access: arr[index]
     ArrayAccess {
         array: Box<Expr>,
         index: Box<Expr>,
     },
+    
+    // Function call: func(args)
+    FunctionCall {
+        function: Box<Expr>,
+        args: Vec<Expr>,
+    },
+    
+    // Member access: obj.member
     MemberAccess {
         object: Box<Expr>,
         member: String,
     },
+    
+    // Pointer member access: ptr->member
     PointerMemberAccess {
         object: Box<Expr>,
         member: String,
     },
+    
+    // Cast: (type)expr
     Cast {
-        type_name: TypeName,
+        type_name: Box<TypeName>,
         expr: Box<Expr>,
     },
-    SizeofType(TypeName),
-    SizeofExpr(Box<Expr>),
+    
+    // Ternary/conditional: cond ? then : else
     TernaryOp {
         condition: Box<Expr>,
         then_expr: Box<Expr>,
         else_expr: Box<Expr>,
     },
+    
+    // Assignment: lvalue = rvalue
     Assignment {
         op: AssignmentOperator,
         lvalue: Box<Expr>,
         rvalue: Box<Expr>,
     },
-    // Comma operator
+    
+    // Comma operator: expr1, expr2
     Sequence(Vec<Box<Expr>>),
-
+    
+    // Sizeof operator
+    SizeofType(Box<TypeName>),
+    SizeofExpr(Box<Expr>),
+    
+    // Compound literal (C99): (type){initializers}
     CompoundLiteral {
-        type_name: TypeName,
-        initializers: Vec<Box<Expr>>,
+        type_name: Box<TypeName>,
+        initializers: Vec<Box<Initializer>>,
     },
 }
 
-// Dedicated operator enums for better type safety and pattern matching
+/// Type name (used in casts, sizeof, etc.)
+#[derive(Debug, Clone)]
+pub struct TypeName {
+    pub specifiers: Vec<TypeSpecifier>,
+    pub qualifiers: Vec<TypeQualifier>,
+    pub declarator: Option<AbstractDeclarator>,
+}
+
+/// Abstract declarator (declarator without identifier)
+#[derive(Debug, Clone)]
+pub struct AbstractDeclarator {
+    pub pointer: Option<Pointer>,
+    pub direct: Option<DirectAbstractDeclarator>,
+}
+
+/// Direct abstract declarator
+#[derive(Debug, Clone)]
+pub enum DirectAbstractDeclarator {
+    /// Parenthesized: (abstract_declarator)
+    Declarator(Box<AbstractDeclarator>),
+    
+    /// Array: [size]
+    Array {
+        declarator: Option<Box<DirectAbstractDeclarator>>,
+        size: Option<Expr>,
+    },
+    
+    /// Function: (params)
+    Function {
+        declarator: Option<Box<DirectAbstractDeclarator>>,
+        params: ParameterList,
+    },
+}
+
+// ============================================================================
+// Operators
+// ============================================================================
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOperator {
     // Arithmetic
@@ -131,25 +518,17 @@ pub enum PostfixOperator {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssignmentOperator {
-    Assign,        // =
-    AddAssign,     // +=
-    SubAssign,     // -=
-    MulAssign,     // *=
-    DivAssign,     // /=
-    ModAssign,     // %=
-    AndAssign,     // &=
-    OrAssign,      // |=
-    XorAssign,     // ^=
-    ShiftLeftAssign,   // <<=
-    ShiftRightAssign,  // >>=
-}
-
-// You'll also need a TypeName representation (placeholder for now)
-#[derive(Debug, Clone)]
-pub struct TypeName {
-    // This will eventually contain type specifiers, qualifiers, etc.
-    // For now, you could use a simple string or Token
-    pub name: String,
+    Assign,              // =
+    AddAssign,           // +=
+    SubAssign,           // -=
+    MulAssign,           // *=
+    DivAssign,           // /=
+    ModAssign,           // %=
+    BitwiseAndAssign,    // &=
+    BitwiseOrAssign,     // |=
+    BitwiseXorAssign,    // ^=
+    ShiftLeftAssign,     // <<=
+    ShiftRightAssign,    // >>=
 }
 
 pub fn parser<'tokens, 'src: 'tokens, I>(
@@ -312,7 +691,7 @@ where
         .then(argument_expression_list().delimited_by(left_paren(), right_paren()))
         .map(|((function, function_span), args)| (Expr::FunctionCall { 
             function: Box::new(function), 
-            args: args.into_iter().map(|(expr, _span)| Box::new(expr)).collect(),
+            args: args.into_iter().map(|(expr, _span)| expr).collect(), // TODO this might need to change to boxed?
           }, function_span)),
 
       // member access
@@ -366,7 +745,7 @@ where
         .then_ignore(right_brace())
         .map(|((type_name, type_name_span), initializers)| {
           (Expr::CompoundLiteral { 
-            type_name: type_name, 
+            type_name: Box::new(type_name), 
             initializers: initializers.into_iter().map(|(initializer, _span)| Box::new(initializer)).collect()
           }, type_name_span)
         })
@@ -379,10 +758,10 @@ fn argument_expression_list<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    assignment_expression()
-      .separated_by(comma())
-      .at_least(1)
-      .collect()
+  assignment_expression()
+    .separated_by(comma())
+    .at_least(1)
+    .collect()
 }
 
 fn unary_expression<'tokens, 'src: 'tokens, I>(
@@ -465,7 +844,7 @@ where
         .then(cast_expr.clone())
         .map(|((type_name, type_name_span), (cast_expr, _cast_expr_span))| {
           (Expr::Cast { 
-            type_name: type_name, 
+            type_name: Box::new(type_name), 
             expr: Box::new(cast_expr)
           }, type_name_span)
         })
@@ -833,9 +1212,9 @@ where
     Token::MulAssign(extra) => (AssignmentOperator::MulAssign, span_from_extra(extra)),
     Token::DivAssign(extra) => (AssignmentOperator::DivAssign, span_from_extra(extra)),
     Token::ModAssign(extra) => (AssignmentOperator::ModAssign, span_from_extra(extra)),
-    Token::AndAssign(extra) => (AssignmentOperator::AndAssign, span_from_extra(extra)),
-    Token::OrAssign(extra) => (AssignmentOperator::OrAssign, span_from_extra(extra)),
-    Token::XorAssign(extra) => (AssignmentOperator::XorAssign, span_from_extra(extra)),
+    Token::AndAssign(extra) => (AssignmentOperator::BitwiseAndAssign, span_from_extra(extra)),
+    Token::OrAssign(extra) => (AssignmentOperator::BitwiseOrAssign, span_from_extra(extra)),
+    Token::XorAssign(extra) => (AssignmentOperator::BitwiseXorAssign, span_from_extra(extra)),
     Token::LeftAssign(extra) => (AssignmentOperator::ShiftLeftAssign, span_from_extra(extra)),
     Token::RightAssign(extra) => (AssignmentOperator::ShiftRightAssign, span_from_extra(extra)),
   }
@@ -846,7 +1225,13 @@ fn expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  assignment_expression()
+    .separated_by(comma())
+    .at_least(1)
+    .collect()
+    .map(|list: Vec<Spanned<Expr>>| {
+      (Expr::Sequence(list.clone().into_iter().map(|(expr, _span)| Box::new(expr)).collect()), list.clone()[0].1)
+    })
 }
 
 fn constant_expression<'tokens, 'src: 'tokens, I>(
@@ -854,19 +1239,29 @@ fn constant_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  conditional_expression()
 }
 
 fn declaration<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<Declaration>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  choice((
+    declaration_specifiers()
+      .then_ignore(semicolon()),
+    declaration_specifiers()
+      .then(init_declarator_list())
+      .then_ignore(semicolon())
+      .map(|((dec_expr, dec_span), (list_expr, list_span))| {
+        
+      }),
+    static_assert_declaration()
+  ))
 }
 
 fn declaration_specifiers<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<DeclarationSpecifiers>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -890,71 +1285,134 @@ where
 }
 
 fn storage_class_specifier<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<StorageClass>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  select! {
+    Token::Auto(extra) => (StorageClass::Auto, span_from_extra(extra)),
+    Token::Register(extra) => (StorageClass::Register, span_from_extra(extra)),
+    Token::Static(extra) => (StorageClass::Static, span_from_extra(extra)),
+    Token::Extern(extra) => (StorageClass::Extern, span_from_extra(extra)),
+    Token::Typedef(extra) => (StorageClass::Typedef, span_from_extra(extra)),
+  } 
 }
 
 fn type_specifier<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  choice((
+    select! {
+      Token::Void(extra) => (TypeSpecifier::Void, span_from_extra(extra)),
+      Token::Char(extra) => (TypeSpecifier::Char, span_from_extra(extra)),
+      Token::Short(extra) => (TypeSpecifier::Short, span_from_extra(extra)),
+      Token::Int(extra) => (TypeSpecifier::Int, span_from_extra(extra)),
+      Token::Long(extra) => (TypeSpecifier::Long, span_from_extra(extra)),
+      Token::Float(extra) => (TypeSpecifier::Float, span_from_extra(extra)),
+      Token::Double(extra) => (TypeSpecifier::Double, span_from_extra(extra)),
+      Token::Signed(extra) => (TypeSpecifier::Signed, span_from_extra(extra)),
+      Token::Unsigned(extra) => (TypeSpecifier::Unsigned, span_from_extra(extra)),
+      Token::Bool(extra) => (TypeSpecifier::Bool, span_from_extra(extra)),
+      Token::Complex(extra) => (TypeSpecifier::Complex, span_from_extra(extra)),
+    },
+    atomic_type_specifier(),
+    struct_or_union_specifier(),
+    enum_specifier(),
+  ))
 }
 
 fn struct_or_union_specifier<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  // : struct_or_union '{' struct_declaration_list '}'
+	// | struct_or_union IDENTIFIER '{' struct_declaration_list '}'
+	// | struct_or_union IDENTIFIER
+	// ;
+  struct_or_union()
 }
 
 fn struct_or_union<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<StructOrUnionKind>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  select! {
+    Token::Struct(extra) => (StructOrUnionKind::Struct, span_from_extra(extra)),
+    Token::Union(extra) => (StructOrUnionKind::Union, span_from_extra(extra)),
+  }
 }
 
 fn struct_declaration_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<StructDeclaration>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  struct_declaration()
+    .separated_by(comma())
+    .at_least(1)
+    .collect()
 }
 
 fn struct_declaration<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<StructDeclaration>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  choice((
+    specifier_qualifier_list()
+      .then_ignore(semicolon())
+      .map(|specifiers| {
+        (StructDeclaration{
+            specifiers: specifiers.clone().into_iter().map(|(specifier, _span)| specifier).collect(),
+            declarators: Vec::new(),
+          }, specifiers.clone()[0].1)
+      }),
+    specifier_qualifier_list()
+      .then(struct_declarator_list())
+      .then_ignore(semicolon())
+      .map(|(specifiers, declarators)| {
+        (StructDeclaration{
+            specifiers: specifiers.clone().into_iter().map(|(specifier, _span)| specifier).collect(),
+            declarators: declarators.into_iter().map(|(declarator, _span)| declarator).collect(),
+          }, specifiers.clone()[0].1)
+      }),
+    // static_assert_declaration(), TODO maybe add this someday
+  ))   
 }
 
 fn specifier_qualifier_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<TypeQualOrSpec>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  type_specifier()
+    .map(|(specifier, span)| (TypeQualOrSpec {specifier: specifier}, span))
+    .or(
+      type_qualifier()
+        .map(|(qualifier, span)| (TypeQualOrSpec {qualifier: qualifier}, span))
+      )
+    .separated_by(comma())
+    .at_least(1)
+    .collect()
 }
 
 fn struct_declarator_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<StructDeclarator>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  struct_declarator()
+    .separated_by(comma())
+    .at_least(1)
+    .collect()
 }
 
 fn struct_declarator<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<StructDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -962,7 +1420,7 @@ where
 }
 
 fn enum_specifier<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -986,7 +1444,7 @@ where
 }
 
 fn atomic_type_specifier<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -994,7 +1452,7 @@ where
 }
 
 fn type_qualifier<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<TypeQualifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -1042,7 +1500,7 @@ where
 }
 
 fn type_qualifier_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<TypeQualifier>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -1114,7 +1572,7 @@ where
 }
 
 fn initializer_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Vec<Spanned<Expr>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<Initializer>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
