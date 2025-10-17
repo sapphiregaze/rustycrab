@@ -1,7 +1,7 @@
 use lexer::Token as LexerToken;
 use lexer::{Extras};
 
-// use ariadne::{Color, Label, Report, ReportKind, Source};
+use ariadne::{Color, Label, Report, ReportKind, Source};
 use chumsky::{
     input::{Stream, ValueInput},
     span::SimpleSpan,
@@ -44,23 +44,21 @@ impl Analyzer {
       // If parsing was unsuccessful, generate a nice user-friendly diagnostic with ariadne. You could also use
       // codespan, or whatever other diagnostic library you care about. You could even just display-print the errors
       // with Rust's built-in `Display` trait, but it's a little crude
-      Err(_) => {
-          // for err in errs {
-          //   Report::build(ReportKind::Error, ((), err.span().into_range()))
-          //     .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
-          //     .with_code(3)
-          //     // .with_message(err.to_string())
-          //     .with_message("Error".to_string())
-          //     .with_label(
-          //       Label::new(((), err.span().into_range()))
-          //         // .with_message(err.reason().to_string())
-          //         .with_message("Reason".to_string())
-          //         .with_color(Color::Red),
-          //     )
-          //     .finish()
-          //     .eprint(Source::from(self.inner.iter().map(|t| t.get_lexeme()).collect::<String>()))
-          //     .unwrap();
-          //   }
+      Err(errs) => {
+          for err in errs {
+            Report::build(ReportKind::Error, ((), err.span().into_range()))
+              .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
+              .with_code(3)
+              .with_message(err.to_string())
+              .with_label(
+                Label::new(((), err.span().into_range()))
+                  .with_message(err.reason().to_string())
+                  .with_color(Color::Red),
+              )
+              .finish()
+              .eprint(Source::from(self.inner.iter().map(|t| t.get_lexeme()).collect::<String>()))
+              .unwrap();
+            }
           return Err(String::from("Parsing errors occurred"));
       }
     }
@@ -96,7 +94,8 @@ where
 {
     recursive(|sexpr| {
         let atom = select! {
-            LexerToken::Float(x) => SExpr::Float(x.lexeme.parse().unwrap()),
+            LexerToken::IntegerConstant(x) => SExpr::Float(x.lexeme.parse().unwrap()),
+            LexerToken::FloatConstant(x) => SExpr::Float(x.lexeme.parse().unwrap()),
             LexerToken::Plus(_) => SExpr::Add,
             LexerToken::Minus(_) => SExpr::Sub,
             LexerToken::Star(_) => SExpr::Mul,

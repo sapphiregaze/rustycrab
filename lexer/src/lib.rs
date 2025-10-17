@@ -441,6 +441,12 @@ pub enum Token {
     Err(LexingError),
 }
 
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.get_lexeme())
+    }
+}
+
 impl Token {
     pub fn get_lexeme(&self) -> &str {
         match self {
