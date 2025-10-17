@@ -35,7 +35,7 @@ pub enum Expr {
     // Other expression types
     FunctionCall {
         function: Box<Expr>,
-        args: Vec<Expr>,
+        args: Vec<Box<Expr>>,
     },
     ArrayAccess {
         array: Box<Expr>,
@@ -66,7 +66,7 @@ pub enum Expr {
         rvalue: Box<Expr>,
     },
     // Comma operator
-    Sequence(Vec<Expr>),
+    Sequence(Vec<Box<Expr>>),
 
     CompoundLiteral {
         type_name: TypeName,
@@ -273,7 +273,7 @@ where
 }
 
 // TODO fix all the spans that do not include the extra stuff after
-fn postfix_expression<'tokens, 'src: 'tokens, I>(
+pub fn postfix_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
@@ -306,7 +306,7 @@ where
         .then(argument_expression_list().delimited_by(left_paren(), right_paren()))
         .map(|((function, function_span), args)| (Expr::FunctionCall { 
             function: Box::new(function), 
-            args: args.into_iter().map(|(expr, _span)| expr).collect(),
+            args: args.into_iter().map(|(expr, _span)| Box::new(expr)).collect(),
           }, function_span)),
 
       // member access
@@ -351,8 +351,19 @@ where
             }, identifier_span)
         }),
       
+      // compound literals
       left_paren()
-      
+        .ignore_then(type_name())
+        .then_ignore(right_paren().then(left_brace()))
+        .then(initializer_list())
+        .then_ignore(comma().or_not())
+        .then_ignore(right_brace())
+        .map(|((type_name, type_name_span), initializers)| {
+          (Expr::CompoundLiteral { 
+            type_name: type_name, 
+            initializers: initializers.into_iter().map(|(initializer, _span)| Box::new(initializer)).collect()
+          }, type_name_span)
+        })
     ))
   })
 }
@@ -498,17 +509,7 @@ fn expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  assignment_expression()
-    .separated_by(just(Token::Comma))
-    .at_least(1)
-    .map_with_span(|exprs, span| {
-        if exprs.len() == 1 {
-            exprs.into_iter().next().unwrap().0
-        } else {
-            Expr::Sequence(exprs.into_iter().map(|(e, _)| e).collect())
-        }
-    })
-    .map_with_span(|expr, span| (expr, span))
+
 }
 
 fn constant_expression<'tokens, 'src: 'tokens, I>(
@@ -736,7 +737,7 @@ where
 }
 
 fn identifier_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<Expr>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -744,7 +745,7 @@ where
 }
 
 fn type_name<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<TypeName>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -776,7 +777,7 @@ where
 }
 
 fn initializer_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<Expr>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
