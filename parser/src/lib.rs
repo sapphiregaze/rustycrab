@@ -7,22 +7,28 @@ pub type Spanned<T> = (T, Span);
 #[derive(Clone, Debug)]
 pub enum Expr {
     // Literals - values known at compile time
-    IntLiteral(i32),
-    FloatLiteral(f32),
+    IntLiteral(i32),      // Changed from i32 to handle larger constants
+    FloatLiteral(f32),    // Changed from f32 for better precision
     StringLiteral(String),
     CharLiteral(char),
     
     // Variable access - needs symbol lookup
     Identifier(String),
     
-    // Binary/unary operations
+    // Binary/unary operations - use dedicated enums instead of Token
     BinaryOp {
-        op: Token,
+        op: BinaryOperator,  // Changed from Token
         left: Box<Expr>,
         right: Box<Expr>,
     },
     UnaryOp {
-        op: Token,
+        op: UnaryOperator,   // Changed from Token
+        operand: Box<Expr>,
+    },
+    
+    // Postfix operations (separate from UnaryOp)
+    PostfixOp {
+        op: PostfixOperator,
         operand: Box<Expr>,
     },
     
@@ -44,10 +50,10 @@ pub enum Expr {
         member: String,
     },
     Cast {
-        type_name: Token,
+        type_name: TypeName,  // Changed from Token - should be a proper type representation
         expr: Box<Expr>,
     },
-    SizeofType(Token),
+    SizeofType(TypeName),     // Changed from Token
     SizeofExpr(Box<Expr>),
     TernaryOp {
         condition: Box<Expr>,
@@ -55,12 +61,95 @@ pub enum Expr {
         else_expr: Box<Expr>,
     },
     Assignment {
-        op: Token,
+        op: AssignmentOperator,  // Changed from Token
         lvalue: Box<Expr>,
         rvalue: Box<Expr>,
     },
     // Comma operator
     Sequence(Vec<Expr>),
+
+    CompoundLiteral {
+        type_name: TypeName,
+        initializers: Vec<Box<Expr>>,
+    },
+}
+
+// Dedicated operator enums for better type safety and pattern matching
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOperator {
+    // Arithmetic
+    Add,           // +
+    Sub,           // -
+    Mul,           // *
+    Div,           // /
+    Mod,           // %
+    
+    // Bitwise
+    BitwiseAnd,    // &
+    BitwiseOr,     // |
+    BitwiseXor,    // ^
+    ShiftLeft,     // 
+    ShiftRight,    // >>
+    
+    // Logical
+    LogicalAnd,    // &&
+    LogicalOr,     // ||
+    
+    // Comparison
+    Equal,         // ==
+    NotEqual,      // !=
+    LessThan,      // 
+    LessEqual,     // <=
+    GreaterThan,   // >
+    GreaterEqual,  // >=
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOperator {
+    // Prefix increment/decrement
+    PreIncrement,   // ++x
+    PreDecrement,   // --x
+    
+    // Pointer operations
+    Dereference,    // *x
+    AddressOf,      // &x
+    
+    // Arithmetic
+    Plus,           // +x
+    Minus,          // -x
+    
+    // Bitwise/Logical
+    BitwiseNot,     // ~x
+    LogicalNot,     // !x
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PostfixOperator {
+    Increment,  // x++
+    Decrement,  // x--
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AssignmentOperator {
+    Assign,        // =
+    AddAssign,     // +=
+    SubAssign,     // -=
+    MulAssign,     // *=
+    DivAssign,     // /=
+    ModAssign,     // %=
+    AndAssign,     // &=
+    OrAssign,      // |=
+    XorAssign,     // ^=
+    ShiftLeftAssign,   // <<=
+    ShiftRightAssign,  // >>=
+}
+
+// You'll also need a TypeName representation (placeholder for now)
+#[derive(Debug, Clone)]
+pub struct TypeName {
+    // This will eventually contain type specifiers, qualifiers, etc.
+    // For now, you could use a simple string or Token
+    pub name: String,
 }
 
 pub fn parser<'tokens, 'src: 'tokens, I>(
@@ -100,6 +189,8 @@ token_parser!(amp, Token::Amp);
 token_parser!(star, Token::Star);
 token_parser!(plus, Token::Plus);
 token_parser!(minus, Token::Minus);
+token_parser!(inc, Token::IncOp);
+token_parser!(dec, Token::DecOp);
 token_parser!(tilde, Token::Tilde);
 token_parser!(bang, Token::Bang);
 token_parser!(slash, Token::Slash);
@@ -113,6 +204,7 @@ token_parser!(colon, Token::Colon);
 token_parser!(semicolon, Token::Semicolon);
 token_parser!(comma, Token::Comma);
 token_parser!(assign, Token::Assign);
+token_parser!(ptr_op, Token::PtrOp);
 
 fn identifier<'tokens, I>() -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<chumsky::error::Rich<'tokens, Token, Span>>> + Clone
 where
@@ -121,6 +213,15 @@ where
     select! {
         Token::Identifier(extra) => (Expr::Identifier(extra.lexeme.clone()), span_from_extra(extra))
     }
+}
+
+macro_rules! extract_identifier {
+    ($expr:expr) => {
+        match $expr {
+            Expr::Identifier(name) => name,
+            _ => panic!("Expected Expr::Identifier, got {:?}", $expr),
+        }
+    };
 }
 
 // *****************************************************************************************************************************
@@ -171,25 +272,93 @@ where
   }
 }
 
+// TODO fix all the spans that do not include the extra stuff after
 fn postfix_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
   recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|postfix| {
-    let postfix = postfix.boxed();
+    choice((
+      primary_expression(),
 
-    primary_expression()
-      .or(postfix.then(expression().delimited_by(left_bracket(), right_bracket())).map(|(a, b)| (Expr::ArrayAccess{identifier: a, index: b}, a.1)))
-      .or(postfix.then(left_paren())).then_ignore(right_paren())
-      .or(postfix.then(argument_expression_list().delimited_by(left_paren(), right_paren())))
-      .or(postfix.then(dot().ignored()).then(identifier_string())).map(|a, b| ());
-    }
-  )
+      // array access
+      postfix.clone()
+        .then(expression().delimited_by(left_bracket(), right_bracket()))
+        .map(|((array, array_span), (index, _index_span))| {
+            (Expr::ArrayAccess {
+                array: Box::new(array),
+                index: Box::new(index),
+            }, array_span)
+        }),
+
+      // function call w/o arguments
+      postfix.clone()
+        .then_ignore(left_paren())
+        .then_ignore(right_paren())
+        .map(|(function, function_span)| (Expr::FunctionCall { 
+            function: Box::new(function), 
+            args: Vec::new() 
+          }, function_span)),
+
+      // function call w/ arguments
+      postfix.clone()
+        .then(argument_expression_list().delimited_by(left_paren(), right_paren()))
+        .map(|((function, function_span), args)| (Expr::FunctionCall { 
+            function: Box::new(function), 
+            args: args.into_iter().map(|(expr, _span)| expr).collect(),
+          }, function_span)),
+
+      // member access
+      postfix.clone()
+        .then_ignore(dot())
+        .then(identifier())
+        .map(|((identifier, identifier_span), (member, _member_span))| {
+            (Expr::MemberAccess { 
+              object: Box::new(identifier), 
+              member: extract_identifier!(member) 
+            }, identifier_span)
+        }),
+      
+      // pointer member operation
+      postfix.clone()
+        .then_ignore(ptr_op())
+        .then(identifier())
+        .map(|((identifier, identifier_span), (member, _member_span))| {
+            (Expr::MemberAccess { 
+              object: Box::new(identifier), 
+              member: extract_identifier!(member) 
+            }, identifier_span)
+        }),
+
+      // increment operation
+      postfix.clone()
+        .then_ignore(inc())
+        .map(|(identifier, identifier_span)| {
+            (Expr::PostfixOp { 
+              op: PostfixOperator::Increment,
+              operand: Box::new(identifier)
+            }, identifier_span)
+        }),
+
+      // decrement operation
+      postfix.clone()
+        .then_ignore(dec())
+        .map(|(identifier, identifier_span)| {
+            (Expr::PostfixOp { 
+              op: PostfixOperator::Decrement,
+              operand: Box::new(identifier)
+            }, identifier_span)
+        }),
+      
+      left_paren()
+      
+    ))
+  })
 }
 
 fn argument_expression_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<Expr>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -329,7 +498,17 @@ fn expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  assignment_expression()
+    .separated_by(just(Token::Comma))
+    .at_least(1)
+    .map_with_span(|exprs, span| {
+        if exprs.len() == 1 {
+            exprs.into_iter().next().unwrap().0
+        } else {
+            Expr::Sequence(exprs.into_iter().map(|(e, _)| e).collect())
+        }
+    })
+    .map_with_span(|expr, span| (expr, span))
 }
 
 fn constant_expression<'tokens, 'src: 'tokens, I>(
