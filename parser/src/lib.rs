@@ -203,6 +203,8 @@ token_parser!(lt, Token::Lt);
 token_parser!(gt, Token::Gt);
 token_parser!(lte, Token::LeOp);
 token_parser!(gte, Token::GeOp);
+token_parser!(and_op, Token::AndOp);
+token_parser!(or_op, Token::OrOp);
 token_parser!(caret, Token::Caret);
 token_parser!(pipe, Token::Pipe);
 token_parser!(question, Token::Question);
@@ -667,7 +669,21 @@ fn and_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|and| {
+    choice((
+      equality_expression(),
+      and.clone()
+        .then_ignore(amp())
+        .then(equality_expression())
+        .map(|((and_expr, and_span), (eq_expr, _eq_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::BitwiseAnd, 
+            left: Box::new(and_expr), 
+            right: Box::new(eq_expr) 
+          }, and_span)
+        }),
+    ))
+  })
 }
 
 fn exclusive_or_expression<'tokens, 'src: 'tokens, I>(
@@ -675,7 +691,21 @@ fn exclusive_or_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|or| {
+    choice((
+      and_expression(),
+      or.clone()
+        .then_ignore(caret())
+        .then(and_expression())
+        .map(|((or_expr, or_span), (and_expr, _and_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::BitwiseXor, 
+            left: Box::new(or_expr), 
+            right: Box::new(and_expr) 
+          }, or_span)
+        }),
+    ))
+  })
 }
 
 fn inclusive_or_expression<'tokens, 'src: 'tokens, I>(
@@ -683,7 +713,21 @@ fn inclusive_or_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|or| {
+    choice((
+      and_expression(),
+      or.clone()
+        .then_ignore(pipe())
+        .then(and_expression())
+        .map(|((or_expr, or_span), (and_expr, _and_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::BitwiseOr, 
+            left: Box::new(or_expr), 
+            right: Box::new(and_expr) 
+          }, or_span)
+        }),
+    ))
+  })
 }
 
 fn logical_and_expression<'tokens, 'src: 'tokens, I>(
@@ -691,7 +735,21 @@ fn logical_and_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|and| {
+    choice((
+      inclusive_or_expression(),
+      and.clone()
+        .then_ignore(and_op())
+        .then(inclusive_or_expression())
+        .map(|((and_expr, and_span), (or_expr, _or_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::LogicalAnd, 
+            left: Box::new(and_expr), 
+            right: Box::new(or_expr) 
+          }, and_span)
+        }),
+    ))
+  })
 }
 
 fn logical_or_expression<'tokens, 'src: 'tokens, I>(
@@ -699,7 +757,21 @@ fn logical_or_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|or| {
+    choice((
+      logical_and_expression(),
+      or.clone()
+        .then_ignore(or_op())
+        .then(logical_and_expression())
+        .map(|((or_expr, or_span), (and_expr, _and_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::LogicalOr, 
+            left: Box::new(or_expr), 
+            right: Box::new(and_expr) 
+          }, or_span)
+        }),
+    ))
+  })
 }
 
 fn conditional_expression<'tokens, 'src: 'tokens, I>(
@@ -707,7 +779,24 @@ fn conditional_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|cond| {
+    choice((
+      logical_or_expression(),
+      logical_or_expression()
+        .then_ignore(question())
+        .then(expression())
+        .then_ignore(colon())
+        .then(cond.clone())
+        // NOTE: the names in this map are a bit confusion due to the name of the grammar rules vs member names in the TernaryOp
+        .map(|(((or_expr, or_span), (expr, _expr_span)), (cond_expr, _cond_span))| {
+          (Expr::TernaryOp { 
+            condition: Box::new(or_expr), 
+            then_expr: Box::new(expr), 
+            else_expr: Box::new(cond_expr)
+          }, or_span)
+        }),
+    ))
+  })
 }
 
 fn assignment_expression<'tokens, 'src: 'tokens, I>(
@@ -715,15 +804,41 @@ fn assignment_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|assign_expr| {
+    choice((
+      conditional_expression(),
+      unary_expression()
+        .then(assignment_operator())
+        .then(assign_expr.clone())
+        .map(|(((cond_expr, cond_span), (assign_op, _assign_op_span)), (assign_expr, _assign_expr_span))| {
+          (Expr::Assignment { 
+            op: assign_op, 
+            lvalue: Box::new(cond_expr), 
+            rvalue: Box::new(assign_expr) 
+          }, cond_span)
+        }),
+    ))
+  })
 }
 
 fn assignment_operator<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<AssignmentOperator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  select! {
+    Token::EqOp(extra) => (AssignmentOperator::Assign, span_from_extra(extra)),
+    Token::AddAssign(extra) => (AssignmentOperator::AddAssign, span_from_extra(extra)),
+    Token::SubAssign(extra) => (AssignmentOperator::SubAssign, span_from_extra(extra)),
+    Token::MulAssign(extra) => (AssignmentOperator::MulAssign, span_from_extra(extra)),
+    Token::DivAssign(extra) => (AssignmentOperator::DivAssign, span_from_extra(extra)),
+    Token::ModAssign(extra) => (AssignmentOperator::ModAssign, span_from_extra(extra)),
+    Token::AndAssign(extra) => (AssignmentOperator::AndAssign, span_from_extra(extra)),
+    Token::OrAssign(extra) => (AssignmentOperator::OrAssign, span_from_extra(extra)),
+    Token::XorAssign(extra) => (AssignmentOperator::XorAssign, span_from_extra(extra)),
+    Token::LeftAssign(extra) => (AssignmentOperator::ShiftLeftAssign, span_from_extra(extra)),
+    Token::RightAssign(extra) => (AssignmentOperator::ShiftRightAssign, span_from_extra(extra)),
+  }
 }
 
 fn expression<'tokens, 'src: 'tokens, I>(
