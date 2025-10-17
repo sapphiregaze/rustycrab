@@ -1,5 +1,6 @@
 use logos::Logos;
 use logos::Skip;
+use std::fmt;
 
 /// A wrapper around a [`logos::Lexer`] that provides an iterator with
 /// consistent error handling.
@@ -70,7 +71,7 @@ impl<'src> Lexer<'src> {
 /// - `lexeme`: the matched string slice from the source.
 /// - `line`: the current line number in the source code.
 /// - `column`: the column position where the token starts.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Extras {
     pub lexeme: String,
     pub line: usize,
@@ -186,7 +187,7 @@ fn preprocessor_callback(lex: &mut logos::Lexer<Token>) -> LexingError {
 ///
 /// Any unidentified character would result in a
 /// [`LexingError::UnexpectedCharacter`].
-#[derive(Logos, Debug, PartialEq)]
+#[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(extras = Extras)]
 #[logos(skip(r"\n", newline_callback))]
 #[logos(skip r"[ \t\v\f]")]
@@ -438,6 +439,110 @@ pub enum Token {
         preprocessor_callback
     )]
     Err(LexingError),
+}
+
+impl Token {
+    pub fn get_lexeme(&self) -> &str {
+        match self {
+            Token::Auto(e)
+            | Token::Break(e)
+            | Token::Case(e)
+            | Token::Char(e)
+            | Token::Const(e)
+            | Token::Continue(e)
+            | Token::Default(e)
+            | Token::Do(e)
+            | Token::Double(e)
+            | Token::Else(e)
+            | Token::Enum(e)
+            | Token::Extern(e)
+            | Token::Float(e)
+            | Token::For(e)
+            | Token::Goto(e)
+            | Token::If(e)
+            | Token::Inline(e)
+            | Token::Int(e)
+            | Token::Long(e)
+            | Token::Register(e)
+            | Token::Restrict(e)
+            | Token::Return(e)
+            | Token::Short(e)
+            | Token::Signed(e)
+            | Token::Sizeof(e)
+            | Token::Static(e)
+            | Token::Struct(e)
+            | Token::Switch(e)
+            | Token::Typedef(e)
+            | Token::Union(e)
+            | Token::Unsigned(e)
+            | Token::Void(e)
+            | Token::Volatile(e)
+            | Token::While(e)
+            | Token::Alignas(e)
+            | Token::Alignof(e)
+            | Token::Atomic(e)
+            | Token::Bool(e)
+            | Token::Complex(e)
+            | Token::Generic(e)
+            | Token::Imaginary(e)
+            | Token::Noreturn(e)
+            | Token::StaticAssert(e)
+            | Token::ThreadLocal(e)
+            | Token::FuncName(e)
+            | Token::Identifier(e)
+            | Token::IntegerConstant(e)
+            | Token::FloatConstant(e)
+            | Token::StringLiteral(e)
+            | Token::Ellipsis(e)
+            | Token::RightAssign(e)
+            | Token::LeftAssign(e)
+            | Token::AddAssign(e)
+            | Token::SubAssign(e)
+            | Token::MulAssign(e)
+            | Token::DivAssign(e)
+            | Token::ModAssign(e)
+            | Token::AndAssign(e)
+            | Token::XorAssign(e)
+            | Token::OrAssign(e)
+            | Token::RightOp(e)
+            | Token::LeftOp(e)
+            | Token::IncOp(e)
+            | Token::DecOp(e)
+            | Token::PtrOp(e)
+            | Token::AndOp(e)
+            | Token::OrOp(e)
+            | Token::LeOp(e)
+            | Token::GeOp(e)
+            | Token::EqOp(e)
+            | Token::NeOp(e)
+            | Token::Semicolon(e)
+            | Token::LBrace(e)
+            | Token::RBrace(e)
+            | Token::Comma(e)
+            | Token::Colon(e)
+            | Token::Assign(e)
+            | Token::LParen(e)
+            | Token::RParen(e)
+            | Token::LBracket(e)
+            | Token::RBracket(e)
+            | Token::Dot(e)
+            | Token::Amp(e)
+            | Token::Bang(e)
+            | Token::Tilde(e)
+            | Token::Minus(e)
+            | Token::Plus(e)
+            | Token::Star(e)
+            | Token::Slash(e)
+            | Token::Percent(e)
+            | Token::Lt(e)
+            | Token::Gt(e)
+            | Token::Caret(e)
+            | Token::Pipe(e)
+            | Token::Question(e) => &e.lexeme,
+            Token::Comment => "",
+            Token::Err(_) => "",
+        }
+    }
 }
 
 #[cfg(test)]
