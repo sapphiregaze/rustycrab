@@ -41,7 +41,7 @@ fn main() {
     let mut lexer = Lexer::new(&src);
     let tokens = lexer.collect_all();
     let mut will_exit = false;
-    for result in &tokens {
+    for result in tokens.clone() {
         match result {
             Ok(token) => debug!("Token: {:?}", token),
             Err(e) => {
@@ -53,7 +53,7 @@ fn main() {
     if will_exit {
       process::exit(1);
     }
-    let parser = parser::MyParser::new(tokens.into_iter().filter_map(|t| t.ok()).collect());
+    let parser = parser::Analyzer::new(tokens.into_iter().map(|r| r.unwrap()).collect());
     match parser.parse() {
         Ok(ast) => debug!("AST: {:?}", ast),
         Err(e) => error!("Parsing Error: {:?}", e),
