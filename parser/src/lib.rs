@@ -448,15 +448,64 @@ fn cast_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|cast_expr| {
+    choice((
+      unary_expression(),
+      left_paren()
+        .ignore_then(type_name())
+        .then_ignore(right_paren())
+        .then(cast_expr.clone())
+        .map(|((type_name, type_name_span), (cast_expr, _cast_expr_span))| {
+          (Expr::Cast { 
+            type_name: type_name, 
+            expr: Box::new(cast_expr)
+          }, type_name_span)
+        })
+    ))
+  })
 }
+
 
 fn multiplicative_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|mult| {
+    choice((
+      cast_expression(),
+      mult.clone()
+        .then_ignore(star())
+        .then(cast_expression())
+        .map(|((mult_expr, mult_span), (cast_expr, _cast_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::Mul, 
+            left: Box::new(mult_expr), 
+            right: Box::new(cast_expr) 
+          }, mult_span)
+        }),
+      mult.clone()
+        .then_ignore(slash())
+        .then(cast_expression())
+        .map(|((mult_expr, mult_span), (cast_expr, _cast_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::Div, 
+            left: Box::new(mult_expr), 
+            right: Box::new(cast_expr) 
+          }, mult_span)
+        }),
+      mult.clone()
+        .then_ignore(percent())
+        .then(cast_expression())
+        .map(|((mult_expr, mult_span), (cast_expr, _cast_span))| {
+          (Expr::BinaryOp { 
+            op: BinaryOperator::Mod, 
+            left: Box::new(mult_expr), 
+            right: Box::new(cast_expr) 
+          }, mult_span)
+        }),
+    ))
+  })
 }
 
 fn additive_expression<'tokens, 'src: 'tokens, I>(
