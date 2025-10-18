@@ -36,13 +36,6 @@
   };
 }
 
-%union {
-  std::unique_ptr<Stmt> stmt;
-  std::unique_ptr<Expr> expr;
-  std::unique_ptr<Decl> decl;
-  std::unique_ptr<TranslationUnit> translation_unit;
-};
-
 %token	IDENTIFIER I_CONSTANT F_CONSTANT STRING_LITERAL FUNC_NAME SIZEOF
 %token	PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP
 %token	AND_OP OR_OP MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
@@ -60,31 +53,16 @@
 
 %token	ALIGNAS ALIGNOF ATOMIC GENERIC NORETURN STATIC_ASSERT THREAD_LOCAL
 
-%type <std::unique_ptr<TranslationUnit>> translation_unit
-/* %type <std::unique_ptr<Decl>> external_decl
-%type <std::unique_ptr<FunctionDecl>> function_def
-%type <std::unique_ptr<CompoundStmt>> compound_stmt
-%type <std::unique_ptr<Stmt>> stmt
-%type <std::unique_ptr<Expr>> expr postfix_expr primary_expr argument_expr_list constant_expression
-%type <std::unique_ptr<Type>> type_spec
-%type <std::unique_ptr<IfStmt>> selection_statement */
-
-%type <std::unique_ptr<Stmt>> expression_statement
-%type <std::unique_ptr<Stmt>> selection_statement
-%type <std::unique_ptr<Stmt>> iteration_statement
-%type <std::unique_ptr<Stmt>> jump_statement
-%type <std::unique_ptr<Stmt>> statement
+%type <std::unique_ptr<Stmt>> expression_statement selection_statement iteration_statement jump_statement statement assignment_expression
 
 %type <std::unique_ptr<Expr>> expression
 
 %type <std::unique_ptr<Decl>> external_declaration
-%type <std::unique_ptr<FunctionDecl>> function_definition
-%type <std::vector<std::unique_ptr<Decl>>> declaration_list
+/* %type <std::vector<std::unique_ptr<Decl>>> declaration_list */
 %type <std::unique_ptr<Decl>> declaration
 %type <std::unique_ptr<TranslationUnit>> translation_unit
 
 %type <std::unique_ptr<Type>> declaration_specifiers
-%type <std::string> declarator
 
 %parse-param { Driver& driver }
 
