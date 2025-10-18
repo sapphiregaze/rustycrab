@@ -595,6 +595,7 @@ token_parser!(semicolon, Token::Semicolon);
 token_parser!(comma, Token::Comma);
 token_parser!(assign, Token::Assign);
 token_parser!(ptr_op, Token::PtrOp);
+token_parser!(enum_token, Token::Enum);
 
 fn identifier<'tokens, I>() -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<chumsky::error::Rich<'tokens, Token, Span>>> + Clone
 where
@@ -1313,7 +1314,7 @@ where
       declarator()
         .then_ignore(eq())
         .then(initializer())
-        .map(|((decl, decl_span), (init, init_span))| (InitDeclarator{declarator: decl, initializer: init}, decl_span))
+        .map(|((decl, decl_span), (init, _init_span))| (InitDeclarator{declarator: decl, initializer: Some(init)}, decl_span))
     )
 }
 
@@ -1361,11 +1362,41 @@ fn struct_or_union_specifier<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  // : struct_or_union '{' struct_declaration_list '}'
-	// | struct_or_union IDENTIFIER '{' struct_declaration_list '}'
-	// | struct_or_union IDENTIFIER
-	// ;
-  struct_or_union()
+  // TODO try to understand why boxed is needed here
+  choice((
+    struct_or_union()
+      .then_ignore(left_brace())
+      .then(struct_declaration_list())
+      .then_ignore(right_brace())
+      .map(|((kind, kind_span), struct_declaration_list)| {
+        (TypeSpecifier::Struct(StructOrUnion { 
+          kind: kind, 
+          name: Option::None, 
+          declarations: Some(struct_declaration_list.clone().into_iter().map(|(decl, _span)| decl).collect())
+        }), kind_span)
+      }).boxed(),
+    struct_or_union()
+      .then(identifier())
+      .then_ignore(left_brace())
+      .then(struct_declaration_list())
+      .then_ignore(right_brace())
+      .map(|(((kind, kind_span), (identifier, _identifier_span)), struct_declaration_list)| {
+        (TypeSpecifier::Struct(StructOrUnion { 
+          kind: kind, 
+          name: Some(extract_identifier!(identifier)), 
+          declarations: Some(struct_declaration_list.clone().into_iter().map(|(decl, _span)| decl).collect())
+        }), kind_span)
+      }).boxed(),
+    struct_or_union()
+      .then(identifier())
+      .map(|((kind, kind_span), (identifier, _identifier_span))| {
+        (TypeSpecifier::Struct(StructOrUnion { 
+          kind: kind, 
+          name: Some(extract_identifier!(identifier)), 
+          declarations: Option::None
+        }), kind_span)
+      }).boxed(),
+  ))
 }
 
 fn struct_or_union<'tokens, 'src: 'tokens, I>(
@@ -1461,7 +1492,26 @@ fn struct_declarator<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  declarator()
+      .map(|(declarator, declarator_span)| {
+        (StructDeclarator { declarator: declarator, bit_field: Option::None }, declarator_span)
+      })
+
+  // TODO implement bit_field thingy
+  // colon()
+  //   .ignore_then(constant_expression())
+  //   .map(|(constant, span)| {
+  //     StructDeclarator{
+  //       declarator: Declarator { pointer: (), direct_declarator: () },
+  //       bit_field: Some(constant)
+  //     }
+  //   }),
+  // declarator()
+  //   .then_ignore(colon())
+  //   .then(constant_expression())
+  //   .map(|((declarator, declarator_span), (constant, constant_span))| {
+
+  //   }),
 }
 
 fn enum_specifier<'tokens, 'src: 'tokens, I>(
@@ -1469,19 +1519,54 @@ fn enum_specifier<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+   choice((
+    // TODO enum_token span should be returned
+    enum_token()
+      .ignore_then(left_brace())
+      .ignore_then(enumerator_list())
+      .then_ignore(right_brace())
+      .map(|enumerators| {
+        (TypeSpecifier::Enum(EnumSpecifier { 
+          name: Option::None, 
+          enumerators: Some(enumerators.clone().into_iter().map(|(enumerator, _span)| enumerator).collect())
+        }), enumerators[0].1)
+      }),
+    enum_token()
+      .ignore_then(identifier())
+      .then_ignore(left_brace())
+      .then(enumerator_list())
+      .then_ignore(right_brace())
+      .map(|((identifier, span), enumerators)| {
+        (TypeSpecifier::Enum(EnumSpecifier { 
+          name: extract_identifier!(identifier), 
+          enumerators: Some(enumerators.clone().into_iter().map(|(enumerator, _span)| enumerator).collect())
+        }), span)
+      }),
+    enum_token()
+      .ignore_then(identifier())
+      .map(|(identifier, span)| {
+        (TypeSpecifier::Enum(EnumSpecifier { 
+          name: extract_identifier!(identifier), 
+          enumerators: Option::None
+        }), span)
+      }),
+   ))
 }
 
 fn enumerator_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<Enumerator>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  enumerator()
+    .separated_by(comma())
+    .at_least(1)
+    .allow_trailing()
+    .collect()
 }
 
 fn enumerator<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<Enumerator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -1505,7 +1590,7 @@ where
 }
 
 fn function_specifier<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<FunctionSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -1513,7 +1598,7 @@ where
 }
 
 fn alignment_specifier<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
