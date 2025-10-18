@@ -626,6 +626,7 @@ token_parser!(question, Token::Question);
 token_parser!(colon, Token::Colon);
 token_parser!(semicolon, Token::Semicolon);
 token_parser!(comma, Token::Comma);
+token_parser!(ellipsis, Token::Ellipsis);
 token_parser!(assign, Token::Assign);
 token_parser!(ptr_op, Token::PtrOp);
 token_parser!(enum_token, Token::Enum);
@@ -711,7 +712,7 @@ pub fn postfix_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|postfix| {
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|postfix: Recursive<dyn Parser<'_, I, Spanned<Expr>, extra::Full<Rich<'tokens, Token>, (), ()>>>| {
     choice((
       primary_expression(),
 
@@ -1712,6 +1713,7 @@ fn direct_declarator<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
+  // TODO reformat this using or_not() parser
   recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|direct| {
     choice((
       identifier()
@@ -1878,7 +1880,23 @@ fn pointer<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|pointer: Recursive<dyn Parser<'_, I, Spanned<Pointer>, extra::Full<Rich<'tokens, Token>, (), ()>>>| {
+    star()
+      .ignore_then(type_qualifier_list().or_not())
+      .then(pointer.or_not())
+      .map_with(|(qualifiers_option, pointer_option), e| {
+        (Pointer{
+          qualifiers: match qualifiers_option {
+            Some(qualifiers) => qualifiers.clone().into_iter().map(|(qualifier, _span)| qualifier).collect(),
+            None => Vec::new(),
+          },
+          next: match pointer_option {
+            Some(pointer) => Some(Box::new(pointer.0)),
+            None => None
+          },
+        }, e.span())
+      })
+  })
 }
 
 fn type_qualifier_list<'tokens, 'src: 'tokens, I>(
@@ -1886,7 +1904,10 @@ fn type_qualifier_list<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  type_qualifier()
+    .repeated()
+    .at_least(1)
+    .collect()
 }
 
 fn parameter_type_list<'tokens, 'src: 'tokens, I>(
@@ -1894,11 +1915,21 @@ fn parameter_type_list<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  parameter_list()
+    .then(comma().then(ellipsis()).or_not())
+    .map_with(|(parameters, variadic), e| {
+      (ParameterList{
+        params: parameters.clone().into_iter().map(|(parameter, _span)| parameter).collect(),
+        variadic: match variadic {
+          Some(_) => true,
+          None => false
+        },
+      }, e.span())
+    })
 }
 
 fn parameter_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<ParameterDeclaration>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -1906,7 +1937,7 @@ where
 }
 
 fn parameter_declaration<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<ParameterDeclaration>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
