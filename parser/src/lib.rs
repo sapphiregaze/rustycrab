@@ -317,6 +317,38 @@ pub enum ArrayDeclaratorType {
     Qualifiers(Vec<TypeQualifier>),
 }
 
+/// Abstract declarator (declarator without identifier)
+#[derive(Debug, Clone)]
+pub struct AbstractDeclarator {
+    pub pointer: Option<Pointer>,
+    pub direct: Option<DirectAbstractDeclarator>,
+}
+
+/// Direct abstract declarator
+#[derive(Debug, Clone)]
+pub enum DirectAbstractDeclarator {
+    /// Parenthesized declarator: (declarator)
+    Declarator(Box<AbstractDeclarator>),
+    
+    /// Array: declarator[expr]
+    Array {
+        declarator: Option<Box<DirectAbstractDeclarator>>,
+        array_type: ArrayDeclaratorType,
+    },
+    
+    /// Function: declarator(params)
+    Function {
+        declarator: Option<Box<DirectAbstractDeclarator>>,
+        params: Option<ParameterList>,
+    },
+
+    /// Function: declarator(arguments)
+    FunctionCall {
+        declarator: Option<Box<DirectAbstractDeclarator>>,
+        params: Option<Vec<Box<Expr>>>,
+    },
+}
+
 /// Parameter list for function declarations
 #[derive(Debug, Clone)]
 pub struct ParameterList {
@@ -472,32 +504,6 @@ pub struct TypeName {
     pub specifiers: Vec<TypeSpecifier>,
     pub qualifiers: Vec<TypeQualifier>,
     pub declarator: Option<AbstractDeclarator>,
-}
-
-/// Abstract declarator (declarator without identifier)
-#[derive(Debug, Clone)]
-pub struct AbstractDeclarator {
-    pub pointer: Option<Pointer>,
-    pub direct: Option<DirectAbstractDeclarator>,
-}
-
-/// Direct abstract declarator
-#[derive(Debug, Clone)]
-pub enum DirectAbstractDeclarator {
-    /// Parenthesized: (abstract_declarator)
-    Declarator(Box<AbstractDeclarator>),
-    
-    /// Array: [size]
-    Array {
-        declarator: Option<Box<DirectAbstractDeclarator>>,
-        size: Option<Expr>,
-    },
-    
-    /// Function: (params)
-    Function {
-        declarator: Option<Box<DirectAbstractDeclarator>>,
-        params: ParameterList,
-    },
 }
 
 // ============================================================================
@@ -2046,7 +2052,61 @@ fn direct_abstract_declarator<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|direct_abstract_declarator: Recursive<dyn Parser<'_, I, Spanned<DirectAbstractDeclarator>, extra::Full<Rich<'tokens, Token>, (), ()>>>| {
+    choice((
+      // parenthesized declarator
+      left_paren()
+        .ignore_then(abstract_declarator())
+        .then_ignore(right_paren())
+        .map_with(|(declarator, _span), e| {
+          (DirectAbstractDeclarator::Declarator(Box::new(declarator)), e.span())
+        }),
+
+      // empty array or variable length array
+      direct_abstract_declarator.clone()
+        .or_not()
+        .then_ignore(left_bracket())
+        .then(star().or_not())
+        .then_ignore(right_bracket())
+        .map_with(|(direct_option, star_option), e| {
+          (match star_option {
+            Some(_) => DirectAbstractDeclarator::Array { 
+              declarator: direct_option.map(|direct| Box::new(direct.0)), 
+              array_type: ArrayDeclaratorType::VariableLength { qualifiers: Vec::new() } 
+            },
+            None => DirectAbstractDeclarator::Array { 
+              declarator: direct_option.map(|direct| Box::new(direct.0)), 
+              array_type: ArrayDeclaratorType::Empty
+            },
+          }, e.span())
+        }),
+
+        // static array
+        direct_abstract_declarator.clone()
+          .or_not()
+          .then_ignore(left_bracket())
+          .then(
+            choice((
+              static_token().ignore_then(type_qualifier_list().or_not()),
+              type_qualifier_list().or_not().then_ignore(static_token()),
+            ))
+          )
+          .then(assignment_expression())
+          .then_ignore(right_bracket())
+          .map_with(|((direct_option, qualifiers_option), (expr, _expr_span)), e| {
+            (DirectAbstractDeclarator::Array { 
+              declarator: direct_option.map(|direct| Box::new(direct.0)), 
+              array_type: ArrayDeclaratorType::Static { 
+                qualifiers: match qualifiers_option {
+                  Some(qualifiers) => qualifiers.clone().into_iter().map(|(qualifier, _span)| qualifier).collect(),
+                  _ => Vec::new()
+                },
+                size: Box::new(expr)
+              }
+            }, e.span())
+          }),
+    ))
+  })
 }
 
 fn initializer<'tokens, 'src: 'tokens, I>(
