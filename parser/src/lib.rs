@@ -136,7 +136,6 @@ pub struct InitDeclarator {
 }
 
 /// Declaration specifiers (storage class, type qualifiers, type specifiers)
-// TODO see if there is some way to make this a union
 #[derive(Debug, Clone)]
 pub enum DeclarationSpecifier {
     StorageClass(StorageClass),
@@ -200,8 +199,8 @@ pub enum TypeSpecifier {
 // TODO see if there is some way to make this a union
 #[derive(Debug, Clone)]
 pub enum TypeQualOrSpec {
-  Qualifier(Option<TypeQualifier>),
-  Specifier(Option<TypeSpecifier>),
+  Qualifier(TypeQualifier),
+  Specifier(TypeSpecifier),
 }
 
 /// Struct or union specifier
@@ -328,8 +327,14 @@ pub struct ParameterList {
 /// Parameter declaration
 #[derive(Debug, Clone)]
 pub struct ParameterDeclaration {
-    pub specifiers: Vec<DeclarationSpecifier>,
-    pub declarator: Option<Declarator>,  // Can be abstract (unnamed)
+    pub specifiers: Vec<DeclarationSpecifier>,  // Changed from specifiers
+    pub declarator: Option<DeclaratorOrAbstract>,  // Changed type
+}
+
+#[derive(Debug, Clone)]
+pub enum DeclaratorOrAbstract {
+    Declarator(Declarator),           // int x
+    Abstract(AbstractDeclarator),     // int *
 }
 
 // ============================================================================
@@ -1481,7 +1486,7 @@ where
           specifiers: specifiers.clone().into_iter()
             .filter_map(|(qual_or_spec, _span)| {
                 match qual_or_spec {
-                    TypeQualOrSpec::Specifier(Some(specifier)) => Some(specifier),
+                    TypeQualOrSpec::Specifier(specifier) => Some(specifier),
                     _ => None,
                 }
             }).collect(),
@@ -1496,7 +1501,7 @@ where
           specifiers: specifiers.clone().into_iter()
             .filter_map(|(qual_or_spec, _span)| {
                 match qual_or_spec {
-                    TypeQualOrSpec::Specifier(Some(specifier)) => Some(specifier),
+                    TypeQualOrSpec::Specifier(specifier) => Some(specifier),
                     _ => None,
                 }
             }).collect(),
@@ -1513,10 +1518,10 @@ where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
   type_specifier()
-    .map(|(specifier, span)| (TypeQualOrSpec::Specifier(Some(specifier)), span))
+    .map(|(specifier, span)| (TypeQualOrSpec::Specifier(specifier), span))
     .or(
       type_qualifier()
-        .map(|(qualifier, span)| (TypeQualOrSpec::Qualifier(Some(qualifier)), span))
+        .map(|(qualifier, span)| (TypeQualOrSpec::Qualifier(qualifier), span))
       )
     .separated_by(comma())
     .at_least(1)
@@ -1934,7 +1939,10 @@ fn parameter_list<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  parameter_declaration()
+    .separated_by(comma())
+    .at_least(1)
+    .collect()
 }
 
 fn parameter_declaration<'tokens, 'src: 'tokens, I>(
@@ -1942,7 +1950,33 @@ fn parameter_declaration<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  choice((
+        declaration_specifiers()
+            .then(declarator())
+            .map_with(|(specifiers, (declarator, _)), e| {
+                (ParameterDeclaration {
+                    specifiers: specifiers.into_iter().map(|(spec, _)| spec).collect(),
+                    declarator: Some(DeclaratorOrAbstract::Declarator(declarator)),
+                }, e.span())
+            }),
+
+        declaration_specifiers()
+            .then(abstract_declarator())
+            .map_with(|(specifiers, (abs_declarator, _)), e| {
+                (ParameterDeclaration {
+                    specifiers: specifiers.into_iter().map(|(spec, _)| spec).collect(),
+                    declarator: Some(DeclaratorOrAbstract::Abstract(abs_declarator)),
+                }, e.span())
+            }),
+
+        declaration_specifiers()
+            .map_with(|specifiers, e| {
+                (ParameterDeclaration {
+                    specifiers: specifiers.into_iter().map(|(spec, _)| spec).collect(),
+                    declarator: None,
+                }, e.span())
+            }),
+    ))
 }
 
 fn identifier_list<'tokens, 'src: 'tokens, I>(
@@ -1950,7 +1984,10 @@ fn identifier_list<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  identifier()
+    .separated_by(comma())
+    .at_least(1)
+    .collect()
 }
 
 fn type_name<'tokens, 'src: 'tokens, I>(
@@ -1958,19 +1995,54 @@ fn type_name<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  specifier_qualifier_list()
+    .then(abstract_declarator().or_not())
+    .map_with(|(specifiers_qualifiers, declarator_option), e| {
+      let specifiers = specifiers_qualifiers.clone().into_iter()
+        .filter_map(|(specifier_qualifier, _span)| {
+          match specifier_qualifier {
+            TypeQualOrSpec::Specifier(specifier) => Some(specifier),
+            _ => None
+          }
+        }).collect();
+
+      let qualifiers = specifiers_qualifiers.clone().into_iter()
+        .filter_map(|(specifier_qualifier, _span)| {
+          match specifier_qualifier {
+            TypeQualOrSpec::Qualifier(qualifier) => Some(qualifier),
+            _ => None
+          }
+        }).collect();
+      
+      (TypeName {
+        specifiers: specifiers,
+        qualifiers: qualifiers,
+        declarator: match declarator_option {
+          Some(declarator) => Some(declarator.0),
+          _ => None
+        },
+      }, e.span())
+    })
 }
 
 fn abstract_declarator<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<AbstractDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  pointer()
+    .or_not()
+    .then(direct_abstract_declarator().or_not())
+    .map_with(|(pointer_option, declarator_option), e| {
+      (AbstractDeclarator{
+        pointer: pointer_option.map(|pointer| pointer.0),
+        direct: declarator_option.map(|declarator| declarator.0)
+      }, e.span())
+    })
 }
 
 fn direct_abstract_declarator<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<DirectAbstractDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
