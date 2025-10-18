@@ -282,7 +282,13 @@ pub enum DirectDeclarator {
     /// Function: declarator(params)
     Function {
         declarator: Box<DirectDeclarator>,
-        params: Option<ParameterOrArgumentList>,
+        params: Option<ParameterList>,
+    },
+
+    /// Function: declarator(arguments)
+    FunctionCall {
+        declarator: Box<DirectDeclarator>,
+        params: Option<Vec<Box<Expr>>>,
     },
 }
 
@@ -312,11 +318,6 @@ pub enum ArrayDeclaratorType {
     Qualifiers(Vec<TypeQualifier>),
 }
 
-#[derive(Debug, Clone)]
-pub enum ParameterOrArgumentList {
-  ParameterList(ParameterList),
-  ArgumentList(Vec<Box<Expr>>),
-}
 /// Parameter list for function declarations
 #[derive(Debug, Clone)]
 pub struct ParameterList {
@@ -1847,7 +1848,7 @@ where
         .map(|((declarator, declarator_span), (params, _params_span))| {
           (DirectDeclarator::Function { 
             declarator: Box::new(declarator), 
-            params: Some(ParameterOrArgumentList::ParameterList(params.clone())) 
+            params: Some(params.clone()) 
           }, declarator_span)
         }),
 
@@ -1865,10 +1866,10 @@ where
         .then_ignore(left_paren())
         .then(identifier_list())
         .then_ignore(right_paren())
-        .map(|((declarator, declarator_span), params)| {
-          (DirectDeclarator::Function { 
+        .map(|((declarator, declarator_span), args)| {
+          (DirectDeclarator::FunctionCall { 
             declarator: Box::new(declarator), 
-            params: Some(ParameterOrArgumentList::ArgumentList(params.clone().into_iter().map(|(expr, _expr_span)| Box::new(expr)).collect()))
+            params: Some(args.clone().into_iter().map(|(expr, _expr_span)| Box::new(expr)).collect())
           }, declarator_span)
         }),
     ))
