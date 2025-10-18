@@ -161,12 +161,14 @@ pub enum TypeQualifier {
     Const,
     Volatile,
     Restrict,  // C99
+    Atomic,
 }
 
 /// Function specifiers
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FunctionSpecifier {
     Inline,
+    NoReturn,
 }
 
 /// Type specifiers
@@ -274,16 +276,47 @@ pub enum DirectDeclarator {
     /// Array: declarator[expr]
     Array {
         declarator: Box<DirectDeclarator>,
-        size: Option<Expr>,
+        array_type: ArrayDeclaratorType,
     },
     
     /// Function: declarator(params)
     Function {
         declarator: Box<DirectDeclarator>,
-        params: ParameterList,
+        params: Option<ParameterOrArgumentList>,
     },
 }
 
+#[derive(Debug, Clone)]
+pub enum ArrayDeclaratorType {
+    /// Empty: []
+    Empty,
+    
+    /// Variable length: [*]
+    VariableLength {
+      qualifiers: Vec<TypeQualifier>,
+    },
+    
+    /// Regular array with size: [expr]
+    Size {
+        qualifiers: Vec<TypeQualifier>,
+        size: Box<Expr>,
+    },
+    
+    /// Static array: [static expr]
+    Static {
+        qualifiers: Vec<TypeQualifier>,
+        size: Box<Expr>,
+    },
+    
+    /// Just qualifiers: [const]
+    Qualifiers(Vec<TypeQualifier>),
+}
+
+#[derive(Debug, Clone)]
+pub enum ParameterOrArgumentList {
+  ParameterList(ParameterList),
+  ArgumentList(Vec<Box<Expr>>),
+}
 /// Parameter list for function declarations
 #[derive(Debug, Clone)]
 pub struct ParameterList {
@@ -596,6 +629,8 @@ token_parser!(comma, Token::Comma);
 token_parser!(assign, Token::Assign);
 token_parser!(ptr_op, Token::PtrOp);
 token_parser!(enum_token, Token::Enum);
+token_parser!(atomic_token, Token::Atomic);
+token_parser!(static_token, Token::Static);
 
 fn identifier<'tokens, I>() -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<chumsky::error::Rich<'tokens, Token, Span>>> + Clone
 where
@@ -647,6 +682,15 @@ where
             (Expr::FloatLiteral(value), span_from_extra(extra))
         },
     }
+}
+
+fn enumeration_constant<'tokens, 'src: 'tokens, I>(
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token, Span = Span>,
+{
+  // TODO need to check if it is enumeration constant?
+  identifier()
 }
 
 fn string<'tokens, 'src: 'tokens, I>(
@@ -1351,7 +1395,8 @@ where
       Token::Bool(extra) => (TypeSpecifier::Bool, span_from_extra(extra)),
       Token::Complex(extra) => (TypeSpecifier::Complex, span_from_extra(extra)),
     },
-    atomic_type_specifier(),
+    // TODO implement later
+    // atomic_type_specifier(),
     struct_or_union_specifier(),
     enum_specifier(),
   ))
@@ -1538,7 +1583,7 @@ where
       .then_ignore(right_brace())
       .map(|((identifier, span), enumerators)| {
         (TypeSpecifier::Enum(EnumSpecifier { 
-          name: extract_identifier!(identifier), 
+          name: Some(extract_identifier!(identifier)), 
           enumerators: Some(enumerators.clone().into_iter().map(|(enumerator, _span)| enumerator).collect())
         }), span)
       }),
@@ -1546,7 +1591,7 @@ where
       .ignore_then(identifier())
       .map(|(identifier, span)| {
         (TypeSpecifier::Enum(EnumSpecifier { 
-          name: extract_identifier!(identifier), 
+          name: Some(extract_identifier!(identifier)), 
           enumerators: Option::None
         }), span)
       }),
@@ -1570,23 +1615,52 @@ fn enumerator<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  choice((
+    enumeration_constant()
+      .then_ignore(eq())
+      .then(constant_expression())
+      .map(|((enum_constant, enum_span), (constant_expr, _constant_span))| {
+        (Enumerator{
+          name: extract_identifier!(enum_constant),
+          value: Some(constant_expr)
+        }, enum_span)
+      }),
+    enumeration_constant()
+      .map(|(enum_constant, enum_span)| {
+        (Enumerator{
+          name: extract_identifier!(enum_constant),
+          value: Option::None
+        }, enum_span)
+      }),
+  ))
 }
 
-fn atomic_type_specifier<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
-where
-    I: ValueInput<'tokens, Token = Token, Span = Span>,
-{
-  
-}
+// TODO implement later
+// fn atomic_type_specifier<'tokens, 'src: 'tokens, I>(
+// ) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+// where
+//     I: ValueInput<'tokens, Token = Token, Span = Span>,
+// {
+//   atomic_token()
+//     .ignore_then(left_paren())
+//     .ignore_then(type_name())
+//     .then_ignore(right_paren())
+//     .map(|(type_name, span)| {
+      
+//     })
+// }
 
 fn type_qualifier<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<TypeQualifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  select! {
+    Token::Const(extra) => (TypeQualifier::Const, span_from_extra(extra)),
+    Token::Restrict(extra) => (TypeQualifier::Restrict, span_from_extra(extra)),
+    Token::Volatile(extra) => (TypeQualifier::Volatile, span_from_extra(extra)),
+    Token::Atomic(extra) => (TypeQualifier::Atomic, span_from_extra(extra)),
+  }
 }
 
 fn function_specifier<'tokens, 'src: 'tokens, I>(
@@ -1594,35 +1668,213 @@ fn function_specifier<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  select! {
+    Token::Inline(extra) => (FunctionSpecifier::Inline, span_from_extra(extra)),
+    Token::Noreturn(extra) => (FunctionSpecifier::NoReturn, span_from_extra(extra)),
+  }
 }
 
-fn alignment_specifier<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
-where
-    I: ValueInput<'tokens, Token = Token, Span = Span>,
-{
+// TODO implement later
+// fn alignment_specifier<'tokens, 'src: 'tokens, I>(
+// ) -> impl Parser<'tokens, I, Spanned<>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+// where
+//     I: ValueInput<'tokens, Token = Token, Span = Span>,
+// {
   
-}
+// }
 
 fn declarator<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Declarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  choice((
+    pointer()
+      .then(direct_declarator())
+      .map(|((pointer, pointer_span), (declarator, _declarator_span))| {
+        (Declarator{
+          pointer: Some(pointer),
+          direct_declarator: declarator
+        }, pointer_span)
+      }),
+    direct_declarator()
+      .map(|(declarator, declarator_span)| {
+        (Declarator{
+          pointer: Option::None,
+          direct_declarator: declarator
+        }, declarator_span)
+      }),
+  ))
 }
 
 fn direct_declarator<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<DirectDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|direct| {
+    choice((
+      identifier()
+        .map(|(identifier, span)| {
+          (DirectDeclarator::Identifier(extract_identifier!(identifier)), span)
+        }),
+
+      declarator()
+        .delimited_by(left_paren(), right_paren())
+        .map(|(declarator, span)| {
+          (DirectDeclarator::Declarator(Box::new(declarator)), span)
+        }),
+
+      direct.clone()
+        .then_ignore(left_bracket())
+        .then_ignore(right_bracket())
+        .map(|(declarator, span)| {
+          (DirectDeclarator::Array { 
+            declarator: Box::new(declarator), 
+            array_type: ArrayDeclaratorType::Empty
+          }, span)
+        }),
+
+      direct.clone()
+        .then_ignore(left_bracket())
+        .then_ignore(star())
+        .then_ignore(right_bracket())
+        .map(|(declarator, span)| {
+          (DirectDeclarator::Array { 
+            declarator: Box::new(declarator), 
+            array_type: ArrayDeclaratorType::VariableLength{
+              qualifiers: Vec::new()
+            }
+          }, span)
+        }),
+
+      direct.clone()
+        .then_ignore(left_bracket())
+        // since static token can come before or after type qualifiers
+        .then(
+          choice((
+            static_token().ignore_then(type_qualifier_list()),
+            type_qualifier_list().then_ignore(static_token()),
+          ))
+        ).then(assignment_expression())
+        .then_ignore(right_bracket())
+        .map(|(((declarator, declarator_span), type_qualifiers), (expr, _expr_span))| {
+          (DirectDeclarator::Array { 
+            declarator: Box::new(declarator), 
+            array_type: ArrayDeclaratorType::Static { 
+              qualifiers: type_qualifiers.clone().into_iter().map(|(qualifier, _span)| qualifier).collect(), 
+              size: Box::new(expr)
+            }             
+          }, declarator_span)
+        }),
+
+      direct.clone()
+        .then_ignore(left_bracket())
+        .then_ignore(static_token())
+        .then(assignment_expression())
+        .then_ignore(right_bracket())
+        .map(|((declarator, declarator_span), (expr, _expr_span))| {
+          (DirectDeclarator::Array { 
+            declarator: Box::new(declarator), 
+            array_type: ArrayDeclaratorType::Static { 
+              qualifiers: Vec::new(), 
+              size: Box::new(expr)
+            }             
+          }, declarator_span)
+        }),
+      
+      direct.clone()
+        .then_ignore(left_bracket())
+        .then_ignore(static_token())
+        .then(type_qualifier_list())
+        .then_ignore(star())
+        .then_ignore(right_bracket())
+        .map(|((declarator, declarator_span), type_qualifiers)| {
+          (DirectDeclarator::Array { 
+            declarator: Box::new(declarator), 
+            array_type: ArrayDeclaratorType::VariableLength { 
+              qualifiers: type_qualifiers.clone().into_iter().map(|(qualifier, _span)| qualifier).collect(), 
+            }
+          }, declarator_span)
+        }),
+
+      direct.clone()
+        .then_ignore(left_bracket())
+        .then(type_qualifier_list())
+        .then(assignment_expression())
+        .then_ignore(right_bracket())
+        .map(|(((declarator, declarator_span), type_qualifiers), (expr, _expr_span))| {
+          (DirectDeclarator::Array { 
+            declarator: Box::new(declarator), 
+            array_type: ArrayDeclaratorType::Size { 
+              qualifiers: type_qualifiers.clone().into_iter().map(|(qualifier, _span)| qualifier).collect(), 
+              size: Box::new(expr)
+            }             
+          }, declarator_span)
+        }),
+
+      direct.clone()
+        .then_ignore(left_bracket())
+        .then(type_qualifier_list())
+        .then_ignore(right_bracket())
+        .map(|((declarator, declarator_span), type_qualifiers)| {
+          (DirectDeclarator::Array { 
+            declarator: Box::new(declarator), 
+            array_type: ArrayDeclaratorType::Qualifiers(type_qualifiers.clone().into_iter().map(|(qualifier, _span)| qualifier).collect())
+          }, declarator_span)
+        }),
+
+      direct.clone()
+        .then_ignore(left_bracket())
+        .then(assignment_expression())
+        .then_ignore(right_bracket())
+        .map(|((declarator, declarator_span), (expr, _expr_span))| {
+          (DirectDeclarator::Array { 
+            declarator: Box::new(declarator), 
+            array_type: ArrayDeclaratorType::Size { 
+              qualifiers: Vec::new(), 
+              size: Box::new(expr)
+            }             
+          }, declarator_span)
+        }),
+
+      direct.clone()
+        .then_ignore(left_paren())
+        .then(parameter_type_list())
+        .then_ignore(right_paren())
+        .map(|((declarator, declarator_span), (params, _params_span))| {
+          (DirectDeclarator::Function { 
+            declarator: Box::new(declarator), 
+            params: Some(ParameterOrArgumentList::ParameterList(params.clone())) 
+          }, declarator_span)
+        }),
+
+      direct.clone()
+        .then_ignore(left_paren())
+        .then_ignore(right_paren())
+        .map(|(declarator, declarator_span)| {
+          (DirectDeclarator::Function { 
+            declarator: Box::new(declarator), 
+            params: Option::None
+          }, declarator_span)
+        }),
+
+      direct.clone()
+        .then_ignore(left_paren())
+        .then(identifier_list())
+        .then_ignore(right_paren())
+        .map(|((declarator, declarator_span), params)| {
+          (DirectDeclarator::Function { 
+            declarator: Box::new(declarator), 
+            params: Some(ParameterOrArgumentList::ArgumentList(params.clone().into_iter().map(|(expr, _expr_span)| Box::new(expr)).collect()))
+          }, declarator_span)
+        }),
+    ))
+  })
 }
 
 fn pointer<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<Pointer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -1638,7 +1890,7 @@ where
 }
 
 fn parameter_type_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<ParameterList>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
