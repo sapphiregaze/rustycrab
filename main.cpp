@@ -11,6 +11,13 @@
 void lex(std::string);
 void parse(std::string);
 void yyerror(const char*);
+extern int yylex(Parser::semantic_type* yylval,
+                 Parser::location_type* yylloc,
+                 yyscan_t scanner,
+                 Driver& driver);
+extern int yylex_init_extra(void* user_defined, yyscan_t* scanner);
+extern int yylex_destroy(yyscan_t scanner);
+extern void yyset_in(FILE* in_str, yyscan_t scanner);
 
 int main(int argc, char* argv[]) {
   if (argc < 2) {
@@ -24,76 +31,31 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  std::string readall = "";
-  char buffer[4096];
-  size_t n;
-  while ((n = std::fread(buffer, 1, sizeof(buffer), in)) > 0) {
-    readall.append(buffer, n);
+  Driver driver;
+  driver.setFile(argv[1]);
+  yyscan_t scanner;
+  if (yylex_init_extra(&driver, &scanner)) {
+    std::cerr << "Failed to initialize scanner\n";
+    return 1;
   }
+  yyset_in(in, scanner);
 
-  std::cout << "=== Lexing ===" << std::endl;
-  yy_scan_string(readall.c_str());
-  yylex();
-  std::cout << std::endl << std::endl;
+  Parser parser(scanner, driver);
+  Parser::location_type loc;
+  int rc = parser.parse();
 
-  std::cout << "=== Parsing ===" << std::endl;
-  parse(readall);
-  std::cout << std::endl;
+  std::fclose(in);
+  if (rc != 0) {
+    std::cerr << "Parsing failed with code " << rc << "\n";
+    return rc;
+  }
+  yylex_destroy(scanner);
+
+  if (driver.tu) {
+    print(*driver.tu, std::cout);
+  } else {
+    std::cerr << "No translation unit generated\n";
+  }
 
   return 0;
 }
-// void lex(std::string string) {
-  yy_scan_string(string.c_str());
-
-  int token;
-  while ((token = yylex()) != 0) {
-    switch (token) {
-      break;
-    case SEMI:
-      std::cout << ";" << std::endl;
-      break;
-    case EQUAL:
-      std::cout << "=" << " ";
-      break;
-    case PLUS:
-      std::cout << "+" << " ";
-      break;
-    case MINUS:
-      std::cout << "-" << " ";
-      break;
-    case MULT:
-      std::cout << "*" << " ";
-      break;
-    case DIV:
-      std::cout << "/" << " ";
-      break;
-    case INC:
-      std::cout << "++" << " ";
-      break;
-    case DEC:
-      std::cout << "--" << " ";
-      break;
-    case OPEN:
-      std::cout << "(" << " ";
-      break;
-    case CLOSE:
-      std::cout << ")" << " ";
-      break;
-    case FLOAT:
-      std::cout << yylval.fval << " ";
-      break;
-    case IDENTIFIER:
-      std::cout << yylval.sval << " ";
-      break;
-    default:
-      std::cout << "!ERROR!" << std::endl;
-    }
-  }
-}
-
-void parse(std::string string) {
-  yy_scan_string(string.c_str());
-  yyparse();
-}
-
-void yyerror(const char *s) { std::cerr << s << std::endl; }

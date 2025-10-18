@@ -26,19 +26,20 @@ void BinaryExpression::accept(ASTWalker &v){ v.visit(*this); }
 
 
 // Stmt
-// void NullStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void ExprStmt::accept(ASTWalker &v){ v.visit(*this); }
+void NullStmt::accept(ASTWalker &v){ v.visit(*this); }
+void ExprStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void CompoundStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void IfStmt::accept(ASTWalker &v){ v.visit(*this); }
+void IfStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void WhileStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void DoWhileStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void ForStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void SwitchStmt::accept(ASTWalker &v){ v.visit(*this); }
+void SwitchStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void CaseStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void DefaultStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void LabelStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void BreakStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void ContinueStmt::accept(ASTWalker &v){ v.visit(*this); }
+// void GotoStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void ReturnStmt::accept(ASTWalker &v){ v.visit(*this); }
 
 
@@ -51,7 +52,7 @@ void BinaryExpression::accept(ASTWalker &v){ v.visit(*this); }
 // void EnumDecl::accept(ASTWalker &v){ v.visit(*this); }
 // void FunctionDecl::accept(ASTWalker &v){ v.visit(*this); }
 // void DeclStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void TranslationUnit::accept(ASTWalker &v){ v.visit(*this); }
+void TranslationUnit::accept(ASTWalker &v){ v.visit(*this); }
 
 static const char* builtinToString(BUILTIN_TYPE b){
   switch(b){
@@ -78,6 +79,8 @@ static const char* builtinToString(BUILTIN_TYPE b){
 struct Printer : ASTWalker {
   std::ostream &os;
   int indent{0};
+
+  Printer(std::ostream &output) : os(output) {}
 
   void printQual(std::vector<TYPE_QUALIFIER> q){
     for(auto qual : q){
@@ -229,6 +232,41 @@ struct Printer : ASTWalker {
   //   os << " : "; if(e.elseExpr) e.elseExpr->accept(*this);
   // }
 
+  void visit(NullStmt&) override {
+    os << ";\n";
+  }
+
+  void visit(ExprStmt &s) override {
+    if(s.expr) s.expr->accept(*this);
+    os << ";\n";
+  }
+
+  void visit(IfStmt &s) override {
+    os << "if (";
+    if(s.condition) s.condition->accept(*this);
+    os << ") ";
+    if(s.thenBranch) {
+      s.thenBranch->accept(*this);
+    } else {
+      os << "{}";
+    }
+    if(s.elseBranch) {
+      os << " else ";
+      s.elseBranch->accept(*this);
+    }
+  }
+
+  void visit(SwitchStmt &s) override {
+    os << "switch (";
+    if(s.condition) s.condition->accept(*this);
+    os << ") ";
+    if(s.body) {
+      s.body->accept(*this);
+    } else {
+      os << "{}";
+    }
+  }
+
   // void visit(VarDecl &d) override {
   //   printStorage(d.specs.storage);
   //   if(d.specs.isInline) os << "inline ";
@@ -263,4 +301,17 @@ struct Printer : ASTWalker {
   //   }
   //   os << ";\n";
   // }
+
+  // void TranslationUnit::accept(ASTWalker &v){ v.visit(*this); }
+  void visit(TranslationUnit &tu) override {
+    for(auto &decl : tu.declarations){
+      if(decl) decl->accept(*this);
+    }
+  }
+
 };
+
+void print(ASTNode &n, std::ostream &os){
+  Printer p{os};
+  n.accept(p);
+}

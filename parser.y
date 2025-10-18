@@ -1,10 +1,47 @@
-%{
+%define api.parser.class {Parser}
+%defines
+%locations
+%define api.value.type {variant}
+%define parse.error detailed
+%define parse.trace
 
-#include <stdio.h>
-#include "ast.h"
-#include <string>
+%code {
+  #include <memory>
+  #include <string>
+  #include <vector>
+  #include "ast.h"
 
-%}
+  struct Driver {
+    std::string file;
+    std::unique_ptr<TranslationUnit> tu;
+
+    void setFile(const std::string& f) {
+      file = f;
+    }
+    static SourceRange toRange(const Parser::location_type& loc, const std::string& f) {
+      SourceRange r;
+      r.begin.file = f; r.end.file = f;
+      r.begin.line = loc.begin.line; r.begin.column = loc.begin.column;
+      r.end.line   = loc.end.line;   r.end.column   = loc.end.column;
+      return r;
+    }
+    template<class T>
+    static void setLoc(
+      std::unique_ptr<T>& n,
+      const Parser::location_type& loc,
+      const std::string& f
+    ) {
+      if(n) n->loc = toRange(loc, f);
+    }
+  };
+}
+
+%union {
+  std::unique_ptr<Stmt> stmt;
+  std::unique_ptr<Expr> expr;
+  std::unique_ptr<Decl> decl;
+  std::unique_ptr<TranslationUnit> translation_unit;
+};
 
 %token	IDENTIFIER I_CONSTANT F_CONSTANT STRING_LITERAL FUNC_NAME SIZEOF
 %token	PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP
@@ -16,14 +53,43 @@
 %token	TYPEDEF EXTERN STATIC AUTO REGISTER INLINE
 %token	CONST RESTRICT VOLATILE
 %token	BOOL CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE VOID
-%token	COMPLEX IMAGINARY 
+%token	COMPLEX IMAGINARY
 %token	STRUCT UNION ENUM ELLIPSIS
 
 %token	CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
 
 %token	ALIGNAS ALIGNOF ATOMIC GENERIC NORETURN STATIC_ASSERT THREAD_LOCAL
 
+%type <std::unique_ptr<TranslationUnit>> translation_unit
+/* %type <std::unique_ptr<Decl>> external_decl
+%type <std::unique_ptr<FunctionDecl>> function_def
+%type <std::unique_ptr<CompoundStmt>> compound_stmt
+%type <std::unique_ptr<Stmt>> stmt
+%type <std::unique_ptr<Expr>> expr postfix_expr primary_expr argument_expr_list constant_expression
+%type <std::unique_ptr<Type>> type_spec
+%type <std::unique_ptr<IfStmt>> selection_statement */
+
+%type <std::unique_ptr<Stmt>> expression_statement
+%type <std::unique_ptr<Stmt>> selection_statement
+%type <std::unique_ptr<Stmt>> iteration_statement
+%type <std::unique_ptr<Stmt>> jump_statement
+%type <std::unique_ptr<Stmt>> statement
+
+%type <std::unique_ptr<Expr>> expression
+
+%type <std::unique_ptr<Decl>> external_declaration
+%type <std::unique_ptr<FunctionDecl>> function_definition
+%type <std::vector<std::unique_ptr<Decl>>> declaration_list
+%type <std::unique_ptr<Decl>> declaration
+%type <std::unique_ptr<TranslationUnit>> translation_unit
+
+%type <std::unique_ptr<Type>> declaration_specifiers
+%type <std::string> declarator
+
+%parse-param { Driver& driver }
+
 %start translation_unit
+
 %%
 
 primary_expression
@@ -306,7 +372,8 @@ enumerator_list
 	| enumerator_list ',' enumerator
 	;
 
-enumerator	/* identifiers must be flagged as ENUMERATION_CONSTANT */
+/* identifiers must be flagged as ENUMERATION_CONSTANT */
+enumerator
 	: enumeration_constant '=' constant_expression
 	| enumeration_constant
 	;
@@ -490,9 +557,25 @@ expression_statement
 	;
 
 selection_statement
-	: IF '(' expression ')' statement ELSE statement
-	| IF '(' expression ')' statement
-	| SWITCH '(' expression ')' statement
+	: IF '(' expression ')' statement ELSE statement {
+      auto stmt = std::make_unique<IfStmt>();
+      stmt->condition = std::move($3);
+      stmt->thenBranch = std::move($5);
+      stmt->elseBranch = std::move($7);
+      $$ = std::move(stmt);
+  }
+	| IF '(' expression ')' statement {
+      auto stmt = std::make_unique<IfStmt>();
+      stmt->condition =  std::move($3);
+      stmt->thenBranch = std::move($5);
+      $$ = std::move(stmt);
+  }
+	| SWITCH '(' expression ')' statement {
+      auto stmt = std::make_unique<SwitchStmt>();
+      stmt->condition = std::move($3);
+      stmt->body = std::move($5);
+      $$ = std::move(stmt);
+  }
 	;
 
 iteration_statement
@@ -513,8 +596,14 @@ jump_statement
 	;
 
 translation_unit
-	: external_declaration
-	| translation_unit external_declaration
+	: external_declaration {
+      $$ = std::make_unique<TranslationUnit>();
+      $$->addDecl( std::move($1) );
+    }
+	| translation_unit external_declaration {
+      $$ = std::move($1);
+      $$->addDecl( std::move($2) );
+    }
 	;
 
 external_declaration
@@ -538,4 +627,8 @@ void yyerror(const char *s)
 {
 	fflush(stdout);
 	fprintf(stderr, "*** %s\n", s);
+}
+
+void Parser::error(const location_type &loc, const std::string &msg) {
+  std::cerr << "Parse error at " << loc.begin.line << ":" << loc.begin.column << ": " << msg << "\n";
 }
