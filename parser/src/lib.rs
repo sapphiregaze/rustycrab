@@ -196,6 +196,7 @@ pub enum TypeSpecifier {
 
 // Type qualifier or type specifier
 // TODO see if there is some way to make this a union
+#[derive(Debug, Clone)]
 pub enum TypeQualOrSpec {
   Qualifier(Option<TypeQualifier>),
   Specifier(Option<TypeSpecifier>),
@@ -1251,14 +1252,24 @@ where
 {
   choice((
     declaration_specifiers()
-      .then_ignore(semicolon()),
+      .then_ignore(semicolon())
+      .map(|decl_specifier_list| {
+        (Declaration {
+            specifiers: decl_specifier_list.clone().into_iter().map(|(specifier, _span)| specifier).collect(),
+            declarators: Vec::new(),
+        }, decl_specifier_list[0].1)
+      }),
     declaration_specifiers()
       .then(init_declarator_list())
       .then_ignore(semicolon())
-      .map(|((dec_expr, dec_span), (list_expr, list_span))| {
-        
+      .map(|(decl_specifier_list, declarator_list)| {
+        (Declaration {
+            specifiers: decl_specifier_list.clone().into_iter().map(|(specifier, _span)| specifier).collect(),
+            declarators: declarator_list.clone().into_iter().map(|(declarator, _span)| declarator).collect(),
+        }, decl_specifier_list[0].1)
       }),
-    static_assert_declaration()
+    // TODO maybe implement this
+    // static_assert_declaration()
   ))
 }
 
@@ -1281,19 +1292,29 @@ where
 }
 
 fn init_declarator_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<InitDeclarator>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  init_declarator()
+    .separated_by(comma())
+    .at_least(1)
+    .collect()
 }
 
 fn init_declarator<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<InitDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  declarator()
+    .map(|(decl, span)| (InitDeclarator{declarator: decl, initializer: Option::None}, span))
+    .or(
+      declarator()
+        .then_ignore(eq())
+        .then(initializer())
+        .map(|((decl, decl_span), (init, init_span))| (InitDeclarator{declarator: decl, initializer: init}, decl_span))
+    )
 }
 
 fn storage_class_specifier<'tokens, 'src: 'tokens, I>(
@@ -1379,18 +1400,30 @@ where
       .then_ignore(semicolon())
       .map(|specifiers| {
         (StructDeclaration{
-            specifiers: specifiers.clone().into_iter().map(|(specifier, _span)| specifier).collect(),
-            declarators: Vec::new(),
-          }, specifiers.clone()[0].1)
+          specifiers: specifiers.clone().into_iter()
+            .filter_map(|(qual_or_spec, _span)| {
+                match qual_or_spec {
+                    TypeQualOrSpec::Specifier(Some(specifier)) => Some(specifier),
+                    _ => None,
+                }
+            }).collect(),
+          declarators: Vec::new(),
+        }, specifiers.clone()[0].1)
       }),
     specifier_qualifier_list()
       .then(struct_declarator_list())
       .then_ignore(semicolon())
       .map(|(specifiers, declarators)| {
         (StructDeclaration{
-            specifiers: specifiers.clone().into_iter().map(|(specifier, _span)| specifier).collect(),
-            declarators: declarators.into_iter().map(|(declarator, _span)| declarator).collect(),
-          }, specifiers.clone()[0].1)
+          specifiers: specifiers.clone().into_iter()
+            .filter_map(|(qual_or_spec, _span)| {
+                match qual_or_spec {
+                    TypeQualOrSpec::Specifier(Some(specifier)) => Some(specifier),
+                    _ => None,
+                }
+            }).collect(),
+          declarators: declarators.into_iter().map(|(declarator, _span)| declarator).collect(),
+        }, specifiers.clone()[0].1)
       }),
     // static_assert_declaration(), TODO maybe add this someday
   ))   
@@ -1402,10 +1435,10 @@ where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
   type_specifier()
-    .map(|(specifier, span)| (TypeQualOrSpec {specifier: specifier}, span))
+    .map(|(specifier, span)| (TypeQualOrSpec::Specifier(Some(specifier)), span))
     .or(
       type_qualifier()
-        .map(|(qualifier, span)| (TypeQualOrSpec {qualifier: qualifier}, span))
+        .map(|(qualifier, span)| (TypeQualOrSpec::Qualifier(Some(qualifier)), span))
       )
     .separated_by(comma())
     .at_least(1)
@@ -1488,7 +1521,7 @@ where
 }
 
 fn declarator<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<Declarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -1576,7 +1609,7 @@ where
 }
 
 fn initializer<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
