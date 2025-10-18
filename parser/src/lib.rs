@@ -136,12 +136,13 @@ pub struct InitDeclarator {
 }
 
 /// Declaration specifiers (storage class, type qualifiers, type specifiers)
+// TODO see if there is some way to make this a union
 #[derive(Debug, Clone)]
 pub enum DeclarationSpecifier {
-    StorageClass(Option<StorageClass>),
-    TypeQualifier(Option<TypeQualifier>),
-    TypeSpecifier(Option<TypeSpecifier>),
-    FunctionSpecifier(Option<FunctionSpecifier>),  // inline
+    StorageClass(StorageClass),
+    TypeQualifier(TypeQualifier),
+    TypeSpecifier(TypeSpecifier),
+    FunctionSpecifier(FunctionSpecifier),  // inline
 }
 
 /// Storage class specifiers
@@ -194,6 +195,7 @@ pub enum TypeSpecifier {
 }
 
 // Type qualifier or type specifier
+// TODO see if there is some way to make this a union
 pub enum TypeQualOrSpec {
   Qualifier(Option<TypeQualifier>),
   Specifier(Option<TypeSpecifier>),
@@ -1261,11 +1263,21 @@ where
 }
 
 fn declaration_specifiers<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<DeclarationSpecifiers>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<DeclarationSpecifier>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  let mapped_storage_class_specifier = storage_class_specifier().map(|(storage_class, span)| (DeclarationSpecifier::StorageClass(storage_class), span));
+  let mapped_type_qualifier = type_qualifier().map(|(qualifier, span)| (DeclarationSpecifier::TypeQualifier(qualifier), span));
+  let mapped_type_specifier = type_specifier().map(|(specifier, span)| (DeclarationSpecifier::TypeSpecifier(specifier), span));
+  let mapped_function_specifier = function_specifier().map(|(specifier, span)| (DeclarationSpecifier::FunctionSpecifier(specifier), span));
+
+  mapped_storage_class_specifier
+    .or(mapped_type_qualifier)
+    .or(mapped_type_specifier)
+    .or(mapped_function_specifier)
+    .separated_by(comma())
+    .collect()
 }
 
 fn init_declarator_list<'tokens, 'src: 'tokens, I>(
