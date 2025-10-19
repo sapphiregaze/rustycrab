@@ -30,9 +30,7 @@ impl<'src> Lexer<'src> {
     /// This initializes the internal Logos lexer and prepares it to
     /// produce tokens from the provided input.
     pub fn new(src: &'src str) -> Self {
-        Self {
-            inner: Token::lexer(src),
-        }
+        Self { inner: Token::lexer(src) }
     }
 
     /// Returns an iterator over the tokens produced by the lexer.
@@ -83,11 +81,7 @@ impl Default for Extras {
     /// - `line` starts at 1
     /// - `column` starts at 0
     fn default() -> Self {
-        Self {
-            lexeme: String::new(),
-            line: 1,
-            column: 0,
-        }
+        Self { lexeme: String::new(), line: 1, column: 0 }
     }
 }
 
@@ -145,11 +139,7 @@ fn token_callback(lex: &mut logos::Lexer<Token>) -> Extras {
     let lexeme = lex.slice().trim().to_string();
     let line = lex.extras.line;
     let column = lex.span().start.saturating_sub(lex.extras.column) + 1;
-    Extras {
-        lexeme,
-        line,
-        column,
-    }
+    Extras { lexeme, line, column }
 }
 
 /// Handles multi-line comments.
@@ -186,7 +176,7 @@ fn preprocessor_callback(lex: &mut logos::Lexer<Token>) -> LexingError {
 ///
 /// Any unidentified character would result in a
 /// [`LexingError::UnexpectedCharacter`].
-#[derive(Logos, Debug, Clone, PartialEq)]
+#[derive(Logos, Debug, Clone)]
 #[logos(extras = Extras)]
 #[logos(skip(r"\n", newline_callback))]
 #[logos(skip r"[ \t\v\f]")]
@@ -290,35 +280,17 @@ pub enum Token {
     Identifier(Extras),
 
     // === Constants ===
-    #[regex(
-        r"0[xX][a-fA-F0-9]+(((u|U)(l|L|ll|LL)?)|((l|L|ll|LL)(u|U)?))?",
-        token_callback,
-        priority = 7
-    )]
-    #[regex(
-        r"0[0-7]*(((u|U)(l|L|ll|LL)?)|((l|L|ll|LL)(u|U)?))?",
-        token_callback,
-        priority = 5
-    )]
-    #[regex(
-        r"[1-9][0-9]*(((u|U)(l|L|ll|LL)?)|((l|L|ll|LL)(u|U)?))?",
-        token_callback,
-        priority = 3
-    )]
-    #[regex(
-        r#"(u|U|L)?'([^'\\\n]|\\(['\"?\\abfnrtv]|[0-7]{1,3}|x[a-fA-F0-9]+))+'"#,
-        token_callback
-    )]
+    #[regex(r"0[xX][a-fA-F0-9]+(((u|U)(l|L|ll|LL)?)|((l|L|ll|LL)(u|U)?))?", token_callback, priority = 7)]
+    #[regex(r"0[0-7]*(((u|U)(l|L|ll|LL)?)|((l|L|ll|LL)(u|U)?))?", token_callback, priority = 5)]
+    #[regex(r"[1-9][0-9]*(((u|U)(l|L|ll|LL)?)|((l|L|ll|LL)(u|U)?))?", token_callback, priority = 3)]
+    #[regex(r#"(u|U|L)?'([^'\\\n]|\\(['\"?\\abfnrtv]|[0-7]{1,3}|x[a-fA-F0-9]+))+'"#, token_callback)]
     IntegerConstant(Extras),
 
     #[regex(r"[0-9]+([Ee][+-]?[0-9]+)?(f|F|l|L)?", token_callback)]
     #[regex(r"[0-9]*\.[0-9]+([Ee][+-]?[0-9]+)?(f|F|l|L)?", token_callback)]
     #[regex(r"[0-9]+\.[Ee]?[+-]?[0-9]*(f|F|l|L)?", token_callback, priority = 0)]
     #[regex(r"0[xX][a-fA-F0-9]+([Pp][+-]?[0-9]+)?(f|F|l|L)?", token_callback)]
-    #[regex(
-        r"0[xX][a-fA-F0-9]*\.[a-fA-F0-9]+([Pp][+-]?[0-9]+)?(f|F|l|L)?",
-        token_callback
-    )]
+    #[regex(r"0[xX][a-fA-F0-9]*\.[a-fA-F0-9]+([Pp][+-]?[0-9]+)?(f|F|l|L)?", token_callback)]
     #[regex(r"0[xX][a-fA-F0-9]+\.[Pp][+-]?[0-9]+(f|F|l|L)?", token_callback)]
     FloatConstant(Extras),
 
@@ -424,10 +396,7 @@ pub enum Token {
     // === Comments ===
     /// Multi-line (`/* ... */`) and single-line (`// ...`) comments.
     /// Updates line/column counters but does not produce tokens.
-    #[regex(
-        r#"(?m)/\*([^"*]|".*")*\*+(([^"/*]|".*")([^"*]|".*")*\*+)*/"#,
-        comment_callback
-    )]
+    #[regex(r#"(?m)/\*([^"*]|".*")*\*+(([^"/*]|".*")([^"*]|".*")*\*+)*/"#, comment_callback)]
     #[regex(r"//[^\n]*", logos::skip)]
     Comment,
 
@@ -439,6 +408,14 @@ pub enum Token {
     )]
     Err(LexingError),
 }
+
+impl PartialEq for Token {
+    fn eq(&self, other: &Self) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other)
+    }
+}
+
+impl Eq for Token {}
 
 #[cfg(test)]
 mod tests {
@@ -452,8 +429,7 @@ mod tests {
         let mut lexer = Lexer::new(src);
         let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
 
-        let expected: Vec<(&str, usize)> =
-            vec![("int", 1), ("return", 5), ("float", 12), ("_Generic", 18)];
+        let expected: Vec<(&str, usize)> = vec![("int", 1), ("return", 5), ("float", 12), ("_Generic", 18)];
 
         for (token, (lexeme, column)) in tokens.iter().zip(expected.iter()) {
             match token {
@@ -555,8 +531,7 @@ mod tests {
         assert_eq!(
             lexemes,
             vec![
-                "+", "-", "*", "/", "%", "++", "--", "+=", "-=", "==", "!=", "<=", ">=", "&&",
-                "||", ";", ",", "{", "}"
+                "+", "-", "*", "/", "%", "++", "--", "+=", "-=", "==", "!=", "<=", ">=", "&&", "||", ";", ",", "{", "}"
             ]
         );
     }
@@ -567,21 +542,12 @@ mod tests {
         let mut lexer = Lexer::new(src);
         let tokens: Vec<Token> = lexer.iter().filter_map(|res| res.ok()).collect();
 
-        let expected: Vec<(&str, usize, usize)> = vec![
-            ("int", 1, 1),
-            ("a", 1, 5),
-            (";", 1, 6),
-            ("float", 4, 1),
-            ("b", 4, 7),
-            (";", 4, 8),
-        ];
+        let expected: Vec<(&str, usize, usize)> =
+            vec![("int", 1, 1), ("a", 1, 5), (";", 1, 6), ("float", 4, 1), ("b", 4, 7), (";", 4, 8)];
 
         for (token, (lexeme, line, column)) in tokens.iter().zip(expected.iter()) {
             match token {
-                Token::Int(ex)
-                | Token::Float(ex)
-                | Token::Identifier(ex)
-                | Token::Semicolon(ex) => {
+                Token::Int(ex) | Token::Float(ex) | Token::Identifier(ex) | Token::Semicolon(ex) => {
                     assert_eq!(&ex.lexeme, lexeme);
                     assert_eq!(ex.line, *line);
                     assert_eq!(ex.column, *column);
@@ -602,16 +568,10 @@ mod tests {
         assert!(token_opt.is_some(), "Expected a token from the lexer");
 
         let token_res = token_opt.unwrap();
-        assert!(
-            token_res.is_err(),
-            "Expected an error for unprocessed directive"
-        );
+        assert!(token_res.is_err(), "Expected an error for unprocessed directive");
 
         let err = token_res.err().unwrap();
-        assert_eq!(
-            err,
-            LexingError::UnprocessedDirective("#include <stdio.h>".to_string())
-        );
+        assert_eq!(err, LexingError::UnprocessedDirective("#include <stdio.h>".to_string()));
     }
 
     #[test]
@@ -623,10 +583,7 @@ mod tests {
         assert!(token_opt.is_some(), "Expected a token from the lexer");
 
         let token_res = token_opt.unwrap();
-        assert!(
-            token_res.is_err(),
-            "Expected an error for unexpected character"
-        );
+        assert!(token_res.is_err(), "Expected an error for unexpected character");
 
         let err = token_res.err().unwrap();
         assert_eq!(err, LexingError::UnexpectedCharacter('@'));

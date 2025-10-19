@@ -10,7 +10,6 @@ use command::build_command;
 use lexer::Lexer;
 use lexer::Token;
 use parser::parser;
-
 use tracing::debug;
 use tracing::error;
 use tracing_subscriber::EnvFilter;
@@ -53,9 +52,7 @@ fn main() {
 
     let input: Vec<Token> = tokens.iter().map(|result| result.clone().unwrap()).collect();
 
-    let result = parser().parse(
-      input.as_slice()
-    );
+    let result = parser().parse(input.as_slice());
 
     println!("{:?}", result);
 }

@@ -15,11 +15,5 @@ pub fn build_command() -> Command {
                 .value_parser(value_parser!(PathBuf))
                 .required(true),
         )
-        .arg(
-            Arg::new("verbose")
-                .short('v')
-                .long("verbose")
-                .action(ArgAction::SetTrue)
-                .help("Enable verbose output"),
-        )
+        .arg(Arg::new("verbose").short('v').long("verbose").action(ArgAction::SetTrue).help("Enable verbose output"))
 }
