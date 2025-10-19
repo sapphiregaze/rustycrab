@@ -380,13 +380,13 @@ type_specifier
 	| BOOL { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Bool, @1.first_line); }
 	| COMPLEX { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Complex, @1.first_line); }
 	| IMAGINARY { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Imaginary, @1.first_line); }
-	| atomic_type_specifier { $$ = std::move($1); }
-	| struct_or_union_specifier { $$ = std::move($1); }
-	| enum_specifier { $$ = std::move($1); }
-	| TYPEDEF_NAME { $$ = driver.makeTypeDefType(*$1, @1); }
+	/* | atomic_type_specifier { $$ = std::move($1); } */
+	/* | struct_or_union_specifier { $$ = std::move($1); } */
+	/* | enum_specifier { $$ = std::move($1); } */
+	/* | TYPEDEF_NAME { $$ = driver.makeTypeDefType(*$1, @1); } */
 	;
 
-struct_or_union_specifier
+/* struct_or_union_specifier
 	: struct_or_union '{' struct_declaration_list '}' {
         // anonymous struct/union
         $$ = ast.makeStructUnion(nullptr, $1, std::move($3), @2);
@@ -397,11 +397,12 @@ struct_or_union_specifier
       }
 	| struct_or_union IDENTIFIER {
         // forward declaration
-        $$ = ast.makeStructUnion(std::move($2), $1, /*no members*/ {}, @1);
+        $$ = ast.makeStructUnion(std::move($2), $1, {}, @1);
       }
 	;
+*/
 
-struct_or_union
+/* struct_or_union
 	: STRUCT
 	| UNION
 	;
@@ -412,7 +413,7 @@ struct_declaration_list
 	;
 
 struct_declaration
-	: specifier_qualifier_list ';'	/* for anonymous struct/union */
+	: specifier_qualifier_list ';'
 	| specifier_qualifier_list struct_declarator_list ';'
 	| static_assert_declaration
 	;
@@ -448,14 +449,15 @@ enumerator_list
 	| enumerator_list ',' enumerator
 	;
 
-enumerator	/* identifiers must be flagged as ENUMERATION_CONSTANT */
+enumerator
 	: enumeration_constant '=' constant_expression
 	| enumeration_constant
 	;
 
+
 atomic_type_specifier
 	: ATOMIC '(' type_name ')'
-	;
+	; */
 
 type_qualifier
 	: CONST
@@ -469,10 +471,10 @@ function_specifier
 	| NORETURN
 	;
 
-alignment_specifier
+/* alignment_specifier
 	: ALIGNAS '(' type_name ')'
 	| ALIGNAS '(' constant_expression ')'
-	;
+	; */
 
 declarator
   : pointer direct_declarator           { $$ = ast.wrapPointer($2, @1); /* wrap chain already in $1 or combine both; adjust */ }
@@ -483,27 +485,32 @@ direct_declarator
 	: IDENTIFIER { $$ = ast.makeIdentDeclarator(*$1, @1); }
 	| '(' declarator ')' { $$ = std::move($2); }
 	| direct_declarator '[' ']' { $$ = ast.wrapArray($1, /*size*/ nullptr, @2); }
-	| direct_declarator '[' '*' ']' { $$ = ast.wrapArray($1, /*size-as-pointer*/ nullptr, @2); }
-	| direct_declarator '[' STATIC type_qualifier_list assignment_expression ']' { $$ = ast.wrapArray($1, std::move($4), @2); }
-	| direct_declarator '[' STATIC assignment_expression ']' { $$ = ast.wrapArray($1, std::move($3), @2); }
-	| direct_declarator '[' type_qualifier_list '*' ']' { $$ = ast.wrapArray($1, /*size-as-pointer*/ nullptr, @2); }
-	| direct_declarator '[' type_qualifier_list STATIC assignment_expression ']' { $$ = ast.wrapArray($1, std::move($4), @2); }
+	/* | direct_declarator '[' '*' ']' { $$ = ast.wrapArray($1, nullptr, @2); } */
+	/* | direct_declarator '[' STATIC type_qualifier_list assignment_expression ']' { $$ = ast.wrapArray($1, std::move($4), @2); } */
+	/* | direct_declarator '[' STATIC assignment_expression ']' { $$ = ast.wrapArray($1, std::move($3), @2); } */
+	/* | direct_declarator '[' type_qualifier_list '*' ']' { $$ = ast.wrapArray($1, nullptr, @2); } */
+	/* | direct_declarator '[' type_qualifier_list STATIC assignment_expression ']' { $$ = ast.wrapArray($1, std::move($4), @2); } */
 	| direct_declarator '[' type_qualifier_list assignment_expression ']' { $$ = ast.wrapArray($1, std::move($4), @2); }
-	| direct_declarator '[' type_qualifier_list ']' { $$ = ast.wrapArray($1, /*unsized*/ nullptr, @2); }
+  // unsized
+	/* | direct_declarator '[' type_qualifier_list ']' { $$ = ast.wrapArray($1, nullptr, @2); } */
 	| direct_declarator '[' assignment_expression ']' { $$ = ast.wrapArray($1, std::move($3), @2); }
-	| direct_declarator '(' parameter_type_list ')' { $$ = ast.wrapFunction($1, std::move($3), /*variadic set in list*/, @2); }
+  // variadic set in list
+	/* | direct_declarator '(' parameter_type_list ')' { $$ = ast.wrapFunction($1, std::move($3), , @2); } */
 	| direct_declarator '(' ')' { $$ = ast.wrapFunction($1, {}, /*variadic*/ false, @2); }
-	| direct_declarator '(' identifier_list ')' { /* K&R parameters — map to ParamDecl with 'int' default or leave TODO */ $$ = ast.wrapFunction($1, {/*TODO*/}, false, @2); }
+	/* K&R parameters — map to ParamDecl with 'int' default or leave TODO */
+  /* | direct_declarator '(' identifier_list ')' {  $$ = ast.wrapFunction($1, {TODO}, false, @2); } */
 
 pointer
-  : '*' type_qualifier_list pointer     { $$ = /* fold quals into inner then wrap */ $3; $$ = ast.wrapPointer($$, @1); }
+// fold quals into inner then wrap
+  /* : '*' type_qualifier_list pointer     { $$ = $3; $$ = ast.wrapPointer($$, @1); } */
   | '*' type_qualifier_list             { $$ = ast.wrapPointer(AST::Declarator{}, @1); }
   | '*' pointer                         { $$ = ast.wrapPointer($2, @1); }
   | '*'                                 { $$ = ast.wrapPointer(AST::Declarator{}, @1); }
   ;
 
 parameter_type_list
-  : parameter_list ',' ELLIPSIS         { $$ = std::move($1); /* mark variadic true in wrapFunction site */ }
+/* mark variadic true in wrapFunction site */
+  /* : parameter_list ',' ELLIPSIS         { $$ = std::move($1);  } */
   | parameter_list                      { $$ = std::move($1); }
   ;
 
@@ -522,11 +529,9 @@ parameter_declaration
       { $$ = ast.makeParam($1, AST::Declarator{}, @1); }
   ;
 
-type_name
-  : specifier_qualifier_list abstract_declarator
-      { /* apply abstract declarator to base type into a TypeNode */ $$ = /* ast.applyAbstract($1, $2) */ std::move($1.type); }
-  | specifier_qualifier_list
-      { $$ = std::move($1.type); }
+type_name : specifier_qualifier_list { $$ = std::move($1.type); }
+  /* apply abstract declarator to base type into a TypeNode */
+  /* : specifier_qualifier_list abstract_declarator {$$ = ast.applyAbstract($1, $2) std::move($1.type); } */
   ;
 
 type_qualifier_list
@@ -539,13 +544,13 @@ identifier_list
 	| identifier_list ',' IDENTIFIER
 	;
 
-abstract_declarator
+/* abstract_declarator
 	: pointer direct_abstract_declarator
 	| pointer
 	| direct_abstract_declarator
-	;
+	; */
 
-direct_abstract_declarator
+/* direct_abstract_declarator
 	: '(' abstract_declarator ')'
 	| '[' ']'
 	| '[' '*' ']'
@@ -567,23 +572,22 @@ direct_abstract_declarator
 	| '(' parameter_type_list ')'
 	| direct_abstract_declarator '(' ')'
 	| direct_abstract_declarator '(' parameter_type_list ')'
-	;
+	; */
 
-initializer
-  : '{' initializer_list '}'           { $$ = ast.makeInitList(std::move($2), @1); }
-  | '{' initializer_list ',' '}'       { $$ = ast.makeInitList(std::move($2), @1); }
-  | assignment_expression              { $$ = std::move($1); }
+initializer: assignment_expression { $$ = std::move($1); }
+  /* : '{' initializer_list '}'           { $$ = ast.makeInitList(std::move($2), @1); }
+  | '{' initializer_list ',' '}'       { $$ = ast.makeInitList(std::move($2), @1); } */
   ;
 
 initializer_list
 	: designation initializer
 	| initializer { $$ = ast.singleton(std::move($1)); }
-	| initializer_list ',' designation initializer
-	| initializer_list ',' initializer { $1.emplace_back(std::move($3)); $$ = std::move($1); }
+	/* | initializer_list ',' designation initializer
+	| initializer_list ',' initializer { $1.emplace_back(std::move($3)); $$ = std::move($1); } */
 	;
 
-designation                 /* You can extend InitListExpr to carry designators if you model them */
-  : designator_list '='     { /* set a pending designator context in builder if needed */ }
+/* You can extend InitListExpr to carry designators if you model them */
+designation : designator_list '='     { /* set a pending designator context in builder if needed */ }
   ;
 
 designator_list
