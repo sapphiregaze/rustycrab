@@ -727,6 +727,7 @@ where
 }
 
 // TODO fix all the spans that do not include the extra stuff after
+// TODO left recursion problem
 pub fn postfix_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -921,7 +922,7 @@ where
   })
 }
 
-
+// TODO left recursion problem
 fn multiplicative_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -964,6 +965,7 @@ where
   })
 }
 
+// TODO left recursion
 fn additive_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -996,6 +998,7 @@ where
   })
 }
 
+// TODO left recursion
 fn shift_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -1028,6 +1031,7 @@ where
   })
 }
 
+// TODO left recursion
 fn relational_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -1080,6 +1084,7 @@ where
   })
 }
 
+// TODO left recursion
 fn equality_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -1112,6 +1117,7 @@ where
   })
 }
 
+// TODO left recursion
 fn and_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -1134,6 +1140,7 @@ where
   })
 }
 
+// TODO left recursion, but also not currently used
 fn exclusive_or_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -1156,6 +1163,7 @@ where
   })
 }
 
+// TODO left recursion
 fn inclusive_or_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -1178,6 +1186,7 @@ where
   })
 }
 
+// TODO left recursion
 fn logical_and_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -1200,6 +1209,7 @@ where
   })
 }
 
+// TODO left recursion
 fn logical_or_expression<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -2055,6 +2065,7 @@ where
     })
 }
 
+// TODO left recursion
 fn direct_abstract_declarator<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Spanned<DirectAbstractDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
