@@ -578,13 +578,11 @@ pub enum AssignmentOperator {
 }
 
 pub fn parser<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, TranslationUnit, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  primary_expression()
-    .repeated()
-    .collect()
+  translation_unit()
 }
 
 // *****************************************************************************************************************************
