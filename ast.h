@@ -1,7 +1,71 @@
 #pragma once
+
 #include <string>
 #include <ostream>
 #include <vector>
+#include <memory>
+
+namespace cAST {
+
+enum class BINARY_OPERATOR;
+enum class UNARY_OPERATOR;
+enum class TYPE_QUALIFIER;
+enum class TYPE_STORAGE_QUALIFIER;
+
+// forward declarations
+
+// Types
+struct BuiltinType;
+struct PointerType;
+struct ArrayType;
+struct FunctionType;
+struct RecordType;
+struct EnumType;
+struct TypedefType;
+
+// Expr
+struct IntegerLiteral;
+struct FloatingLiteral;
+struct CharLiteral;
+struct StringLiteral;
+struct IdentifierExpr;
+struct MemberExpr;
+struct ArraySubscriptExpr;
+struct CallExpr;
+struct CastExpr;
+struct UnaryExpression;
+struct BinaryExpression;
+struct ConditionalOp;
+struct InitListExpr;
+struct CompoundLiteralExpr;
+
+// Stmt
+struct NullStmt;
+struct ExprStmt;
+struct CompoundStmt;
+struct IfStmt;
+struct WhileStmt;
+struct DoWhileStmt;
+struct ForStmt;
+struct SwitchStmt;
+struct CaseStmt;
+struct DefaultStmt;
+struct LabelStmt;
+struct BreakStmt;
+struct ContinueStmt;
+struct GotoStmt;
+struct ReturnStmt;
+
+// Decl
+struct VarDecl;
+struct ParamDecl;
+struct TypedefDecl;
+struct FieldDecl;
+struct RecordDecl;
+struct EnumDecl;
+struct FunctionDecl;
+struct DeclStmt;
+struct TranslationUnit;
 
 struct SourcePos {
   std::string file;
@@ -45,11 +109,11 @@ struct ASTWalker {
   // Stmt
   virtual void visit(NullStmt&) {}
   virtual void visit(ExprStmt&) {}
-  // virtual void visit(CompoundStmt&) {}
+  virtual void visit(CompoundStmt&) {}
   virtual void visit(IfStmt&) {}
-  // virtual void visit(WhileStmt&) {}
-  // virtual void visit(DoWhileStmt&) {}
-  // virtual void visit(ForStmt&) {}
+  virtual void visit(WhileStmt&) {}
+  virtual void visit(DoWhileStmt&) {}
+  virtual void visit(ForStmt&) {}
   virtual void visit(SwitchStmt&) {}
   // virtual void visit(CaseStmt&) {}
   // virtual void visit(DefaultStmt&) {}
@@ -60,14 +124,14 @@ struct ASTWalker {
   // virtual void visit(ReturnStmt&) {}
 
   // Decl
-  // virtual void visit(VarDecl&) {}
-  // virtual void visit(ParamDecl&) {}
+  virtual void visit(VarDecl&) {}
+  virtual void visit(ParamDecl&) {}
   // virtual void visit(TypedefDecl&) {}
-  // virtual void visit(FieldDecl&) {}
+  virtual void visit(FieldDecl&) {}
   // virtual void visit(RecordDecl&) {}
   // virtual void visit(EnumDecl&) {}
-  // virtual void visit(FunctionDecl&) {}
-  // virtual void visit(DeclStmt&) {}
+  virtual void visit(FunctionDecl&) {}
+  virtual void visit(DeclStmt&) {}
   virtual void visit(TranslationUnit&) {}
 };
 
@@ -149,6 +213,33 @@ struct ExprStmt : public Stmt {
   void accept(ASTWalker &v) override;
 };
 
+struct CompoundStmt : public Stmt {
+  std::vector<std::unique_ptr<Stmt>> statements;
+  void addStmt(std::unique_ptr<Stmt> stmt) {
+    statements.push_back( std::move(stmt) );
+  }
+  void accept(ASTWalker &v) override;
+};
+
+struct WhileStmt : public Stmt {
+  Expr* condition;
+  Stmt* body;
+  void accept(ASTWalker &v) override;
+};
+
+struct DoWhileStmt : public Stmt {
+  Stmt* body;
+  Expr* condition;
+  void accept(ASTWalker &v) override;
+};
+
+struct ForStmt : public Stmt {
+  Stmt* init;
+  Expr* condition;
+  Expr* increment;
+  Stmt* body;
+  void accept(ASTWalker &v) override;
+};
 struct IfStmt : public Stmt {
   Expr* condition;
   Stmt* thenBranch;
@@ -167,6 +258,50 @@ struct Decl : public ASTNode {
   virtual ~Decl() = default;
 };
 
+struct VarSpecifiers {
+  std::vector<TYPE_STORAGE_QUALIFIER> storage;
+  bool isInline{false};
+  bool isNoreturn{false};
+};
+struct VarDecl : public Decl {
+  std::string name;
+  Type* type;
+  Expr* init;
+  VarSpecifiers specs;
+  void accept(ASTWalker &v) override;
+};
+
+struct ParamDecl : public Decl {
+  std::string name;
+  Type* type;
+  // indefinite arity;; idk if we implement tthat
+  bool isVariadic{false};
+  void accept(ASTWalker &v) override;
+};
+
+struct FieldDecl : public Decl {
+  std::string name;
+  Type* type;
+  Expr* bitWidth;
+  void accept(ASTWalker &v) override;
+};
+
+struct FunctionDecl : public Decl {
+  std::string name;
+  Type* returnType;
+  std::vector<std::unique_ptr<ParamDecl>> params;
+  bool isDefinition{false};
+  // indefinite arity;; idk if we implement tthat
+  bool isVariadic{false};
+  Stmt* body;
+  void accept(ASTWalker &v) override;
+};
+
+struct DeclStmt : public Stmt {
+  Decl* declaration;
+  void accept(ASTWalker &v) override;
+};
+
 struct TranslationUnit : public Decl {
   std::vector<std::unique_ptr<Decl>> declarations;
   void addDecl(std::unique_ptr<Decl> decl) {
@@ -176,25 +311,25 @@ struct TranslationUnit : public Decl {
 };
 
 enum class BUILTIN_TYPE {
-  INT,
-  UINT,
-  FLOAT,
-  DOUBLE,
-  LONG_DOUBLE,
-  CHAR,
-  SCHAR,
-  UCHAR,
-  VOID,
-  BOOL,
-  COMPLEX,
-  GENERIC,
-  IMAGINARY,
-  LONG,
-  UNSIGNED_LONG,
-  LONG_LONG,
-  UNSIGNED_LONG_LONG,
-  SHORT,
-  USHORT
+  Int,
+  UInt,
+  Float,
+  Double,
+  Long_Double,
+  Char,
+  Schar,
+  Uchar,
+  Void,
+  Bool,
+  Complex,
+  Generic,
+  Imaginary,
+  Long,
+  Unsigned_Long,
+  Long_Long,
+  Unsigned_Long_Long,
+  Short,
+  Ushort
 };
 
 enum class UNARY_OPERATOR {
@@ -245,22 +380,22 @@ enum class BINARY_OPERATOR {
   COMMA
 };
 
-enum class TypeStorageQualifier {
-  TYPEDEF,
-  STATIC,
-  EXTERN,
-  REGISTER,
-  AUTO,
-  THREAD_LOCAL,
-  NONE
+enum class TYPE_STORAGE_QUALIFIER {
+  Typedef,
+  Static,
+  Extern,
+  Register,
+  Auto,
+  Thread_Local,
+  None
 };
 
 enum class TYPE_QUALIFIER {
-  NONE,
-  CONST,
-  RESTRICT,
-  VOLATILE,
-  ATOMIC
+  None,
+  Const,
+  Restrict,
+  Volatile,
+  Atomic
 };
 
 // types
@@ -307,3 +442,5 @@ struct TypedefType : public Type {
   std::string typedefName;
   void accept(ASTWalker &v) override;
 };
+
+}

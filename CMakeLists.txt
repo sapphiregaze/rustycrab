@@ -1,14 +1,39 @@
-cmake_minimum_required(VERSION 3.21)
-project(FlexBisonTemplate)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-deprecated-register")
 
-include(scripts/flex-bison.cmake)
-fetch_flex_bison()
+project(nonrustycrab CXX)
 
-add_flex_target(run_flex ${CMAKE_SOURCE_DIR}/lexer.l OUTPUT ${CMAKE_SOURCE_DIR}/gen/scanner.h)
-add_bison_target(run_bison ${CMAKE_SOURCE_DIR}/parser.y OUTPUT ${CMAKE_SOURCE_DIR}/gen/parser.h)
+cmake_minimum_required(VERSION 3.1)
 
-add_executable(rc
-  main.cpp
-  ast.cpp
+find_package(BISON REQUIRED)
+find_package(FLEX REQUIRED)
+
+BISON_TARGET(parser parser.yy ${CMAKE_CURRENT_BINARY_DIR}/parser.tab.cc)
+FLEX_TARGET(lexer lexer.l ${CMAKE_CURRENT_BINARY_DIR}/lexer.yy.cc)
+ADD_FLEX_BISON_DEPENDENCY(lexer parser)
+
+add_executable(
+  nrc
+    main.cpp
+    driver.cpp
+
+    ${FLEX_lexer_OUTPUTS}
+    ${BISON_parser_OUTPUTS}
 )
-add_dependencies(rc run_flex run_bison)
+
+target_include_directories(
+  nrc
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${FLEX_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+set_property(TARGET nrc PROPERTY CXX_STANDARD 14)
+
+# enable_testing()
+
+# add_test(
+#   NAME basic
+#     COMMAND ${CMAKE_SOURCE_DIR}/test/test0.pl
+#     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+# )

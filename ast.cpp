@@ -1,4 +1,5 @@
 #include "ast.h"
+using namespace cAST;
 
 void BuiltinType::accept(ASTWalker &v){ v.visit(*this); }
 void PointerType::accept(ASTWalker &v){ v.visit(*this); }
@@ -28,11 +29,11 @@ void BinaryExpression::accept(ASTWalker &v){ v.visit(*this); }
 // Stmt
 void NullStmt::accept(ASTWalker &v){ v.visit(*this); }
 void ExprStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void CompoundStmt::accept(ASTWalker &v){ v.visit(*this); }
+void CompoundStmt::accept(ASTWalker &v){ v.visit(*this); }
 void IfStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void WhileStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void DoWhileStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void ForStmt::accept(ASTWalker &v){ v.visit(*this); }
+void WhileStmt::accept(ASTWalker &v){ v.visit(*this); }
+void DoWhileStmt::accept(ASTWalker &v){ v.visit(*this); }
+void ForStmt::accept(ASTWalker &v){ v.visit(*this); }
 void SwitchStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void CaseStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void DefaultStmt::accept(ASTWalker &v){ v.visit(*this); }
@@ -44,34 +45,34 @@ void SwitchStmt::accept(ASTWalker &v){ v.visit(*this); }
 
 
 // Decl
-// void VarDecl::accept(ASTWalker &v){ v.visit(*this); }
-// void ParamDecl::accept(ASTWalker &v){ v.visit(*this); }
+void VarDecl::accept(ASTWalker &v){ v.visit(*this); }
+void ParamDecl::accept(ASTWalker &v){ v.visit(*this); }
 // void TypedefDecl::accept(ASTWalker &v){ v.visit(*this); }
-// void FieldDecl::accept(ASTWalker &v){ v.visit(*this); }
+void FieldDecl::accept(ASTWalker &v){ v.visit(*this); }
 // void RecordDecl::accept(ASTWalker &v){ v.visit(*this); }
 // void EnumDecl::accept(ASTWalker &v){ v.visit(*this); }
-// void FunctionDecl::accept(ASTWalker &v){ v.visit(*this); }
-// void DeclStmt::accept(ASTWalker &v){ v.visit(*this); }
+void FunctionDecl::accept(ASTWalker &v){ v.visit(*this); }
+void DeclStmt::accept(ASTWalker &v){ v.visit(*this); }
 void TranslationUnit::accept(ASTWalker &v){ v.visit(*this); }
 
 static const char* builtinToString(BUILTIN_TYPE b){
   switch(b){
-    case BUILTIN_TYPE::VOID: return "void";
-    case BUILTIN_TYPE::BOOL: return "_Bool";
-    case BUILTIN_TYPE::CHAR: return "char";
-    case BUILTIN_TYPE::SCHAR: return "signed char";
-    case BUILTIN_TYPE::UCHAR: return "unsigned char";
-    case BUILTIN_TYPE::SHORT: return "short";
-    case BUILTIN_TYPE::USHORT: return "unsigned short";
-    case BUILTIN_TYPE::INT: return "int";
-    case BUILTIN_TYPE::UINT: return "unsigned int";
-    case BUILTIN_TYPE::LONG: return "long";
-    case BUILTIN_TYPE::UNSIGNED_LONG: return "unsigned long";
-    case BUILTIN_TYPE::LONG_LONG: return "long long";
-    case BUILTIN_TYPE::UNSIGNED_LONG_LONG: return "unsigned long long";
-    case BUILTIN_TYPE::FLOAT: return "float";
-    case BUILTIN_TYPE::DOUBLE: return "double";
-    case BUILTIN_TYPE::LONG_DOUBLE: return "long double";
+    case BUILTIN_TYPE::Void: return "void";
+    case BUILTIN_TYPE::Bool: return "_Bool";
+    case BUILTIN_TYPE::Char: return "char";
+    case BUILTIN_TYPE::Schar: return "signed char";
+    case BUILTIN_TYPE::Uchar: return "unsigned char";
+    case BUILTIN_TYPE::Short: return "short";
+    case BUILTIN_TYPE::Ushort: return "unsigned short";
+    case BUILTIN_TYPE::Int: return "int";
+    case BUILTIN_TYPE::UInt: return "unsigned int";
+    case BUILTIN_TYPE::Long: return "long";
+    case BUILTIN_TYPE::Unsigned_Long: return "unsigned long";
+    case BUILTIN_TYPE::Long_Long: return "long long";
+    case BUILTIN_TYPE::Unsigned_Long_Long: return "unsigned long long";
+    case BUILTIN_TYPE::Float: return "float";
+    case BUILTIN_TYPE::Double: return "double";
+    case BUILTIN_TYPE::Long_Double: return "long double";
   }
   return "<builtin?>";
 }
@@ -85,10 +86,24 @@ struct Printer : ASTWalker {
   void printQual(std::vector<TYPE_QUALIFIER> q){
     for(auto qual : q){
       switch(qual){
-        case TYPE_QUALIFIER::CONST: os << "const "; break;
-        case TYPE_QUALIFIER::RESTRICT: os << "restrict "; break;
-        case TYPE_QUALIFIER::VOLATILE: os << "volatile "; break;
-        case TYPE_QUALIFIER::ATOMIC: os << "_Atomic "; break;
+        case TYPE_QUALIFIER::Const: os << "const "; break;
+        case TYPE_QUALIFIER::Restrict: os << "restrict "; break;
+        case TYPE_QUALIFIER::Volatile: os << "volatile "; break;
+        case TYPE_QUALIFIER::Atomic: os << "_Atomic "; break;
+      }
+    }
+  }
+
+  void printStorage(const std::vector<TYPE_STORAGE_QUALIFIER> &storage){
+    for(auto qual : storage){
+      switch(qual){
+        case TYPE_STORAGE_QUALIFIER::Typedef: os << "typedef "; break;
+        case TYPE_STORAGE_QUALIFIER::Static: os << "static "; break;
+        case TYPE_STORAGE_QUALIFIER::Extern: os << "extern "; break;
+        case TYPE_STORAGE_QUALIFIER::Register: os << "register "; break;
+        case TYPE_STORAGE_QUALIFIER::Auto: os << "auto "; break;
+        case TYPE_STORAGE_QUALIFIER::Thread_Local: os << "_Thread_local "; break;
+        case TYPE_STORAGE_QUALIFIER::None: break;
       }
     }
   }
@@ -267,30 +282,66 @@ struct Printer : ASTWalker {
     }
   }
 
-  // void visit(VarDecl &d) override {
-  //   printStorage(d.specs.storage);
-  //   if(d.specs.isInline) os << "inline ";
-  //   if(d.specs.isNoreturn) os << "_Noreturn ";
-  //   if(d.type) d.type->accept(*this);
-  //   if(!d.name.empty()) os << " " << d.name;
-  //   if(d.init){ os << " = "; d.init->accept(*this);} os << ";\n";
-  // }
+  void visit(VarDecl &d) override {
+    printStorage(d.specs.storage);
+    if(d.specs.isInline) os << "inline ";
+    if(d.specs.isNoreturn) os << "_Noreturn ";
+    if(d.type) d.type->accept(*this);
 
-  // void visit(ParamDecl &d) override {
-  //   if(d.type) d.type->accept(*this);
-  //   if(!d.name.empty()) os << " " << d.name;
-  //   if(d.isVariadic) os << " ...";
-  // }
+    if(!d.name.empty()) os << " " << d.name;
+
+    if(d.init){
+      os << " = ";
+      d.init->accept(*this);
+    }
+    os << ";\n";
+  }
+
+  void visit(ParamDecl &d) override {
+    if(d.type) d.type->accept(*this);
+    if(!d.name.empty()) os << " " << d.name;
+    if(d.isVariadic) os << " ...";
+  }
 
   // void visit(TypedefDecl &d) override {
   //   os << "typedef "; if(d.underlying) d.underlying->accept(*this); os << " " << d.name << ";\n";
   // }
 
-  // void visit(FieldDecl &d) override {
-  //   if(d.type) d.type->accept(*this);
-  //   if(!d.name.empty()) os << " " << d.name;
-  //   if(d.bitWidth && *d.bitWidth){ os << " : "; (*d.bitWidth)->get()->accept(*this);} os << ";\n";
-  // }
+  void visit(FieldDecl &d) override {
+    if(d.type) d.type->accept(*this);
+    if(!d.name.empty()) os << " " << d.name;
+    // if(d.bitWidth && *d.bitWidth){
+    //   os << " : ";
+    //   (*d.bitWidth)->get()->accept(*this);
+    // }
+    os << ";\n";
+  }
+
+  void visit(FunctionDecl &d) override {
+    if(d.returnType) d.returnType->accept(*this);
+    os << " " << d.name << "(";
+
+    for(size_t i = 0; i < d.params.size(); ++i){
+      if(i) os << ", ";
+      auto &p = *d.params[i];
+      p.accept(*this);
+    }
+
+    if(d.isVariadic){
+      if(!d.params.empty()) {
+        os << ", ";
+      }
+      os << "...";
+    }
+
+    os << ") ";
+
+    if(d.isDefinition && d.body){
+      d.body->accept(*this);
+    } else {
+      os << ";\n";
+    }
+  }
 
   // void visit(EnumDecl &d) override {
   //   os << "enum "; if(!d.name.empty()) os << d.name;
@@ -302,7 +353,10 @@ struct Printer : ASTWalker {
   //   os << ";\n";
   // }
 
-  // void TranslationUnit::accept(ASTWalker &v){ v.visit(*this); }
+  void visit(DeclStmt &s) override {
+    if(s.declaration) s.declaration->accept(*this);
+  }
+
   void visit(TranslationUnit &tu) override {
     for(auto &decl : tu.declarations){
       if(decl) decl->accept(*this);
