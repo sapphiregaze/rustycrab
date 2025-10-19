@@ -1,19 +1,17 @@
+#include "driver.hpp"
+#include <iostream>
 #include <cctype>
 #include <fstream>
 #include <cassert>
 
-#include "driver.hpp"
-
-cAST::Driver::~Driver()
-{
+cAST::Driver::~Driver() {
   delete(scanner);
   scanner = nullptr;
   delete(parser);
   parser = nullptr;
 }
 
-void cAST::Driver::parse( const char * const filename )
-{
+void cAST::Driver::parse( const char * const filename ) {
   assert( filename != nullptr );
   std::ifstream in_file( filename );
   if( ! in_file.good() )
@@ -24,8 +22,7 @@ void cAST::Driver::parse( const char * const filename )
   return;
 }
 
-void cAST::Driver::parse( std::istream &stream )
-{
+void cAST::Driver::parse( std::istream &stream ) {
   if( ! stream.good()  && stream.eof() ) {
     return;
   }
@@ -34,9 +31,7 @@ void cAST::Driver::parse( std::istream &stream )
   return;
 }
 
-
-void cAST::Driver::parse_helper( std::istream &stream )
-{
+void cAST::Driver::parse_helper( std::istream &stream ){
   delete(scanner);
   try {
   scanner = new cAST::cASTScanner( &stream );
@@ -58,56 +53,55 @@ void cAST::Driver::parse_helper( std::istream &stream )
   const int rc = parser->parse();
   if( rc != accept ) {
     std::cerr << "Parse failed with code: " << rc << std::endl;
+    had_error_ = true;
+    dump_diagnostics( std::cerr );
   }
   return;
 }
 
-void cAST::Driver::print_custom_message(const std::string &message) {
-  std::cout << message << std::endl;
+void cAST::Driver::reset() {
+  head_.reset();
+  diags_.clear();
+  had_error_ = false;
 }
 
-void cAST::Driver::add_upper() {
-  uppercase++;
-  chars++;
-  words++;
+std::unique_ptr<AST::TranslationUnit> cAST::Driver::take() {
+  return std::move(head_);
 }
 
-void cAST::Driver::add_lower() {
-  lowercase++;
-  chars++;
-  words++;
+void cAST::Driver::ensure_root() {
+  if (!head_) head_ = std::make_unique<AST::TranslationUnit>();
 }
 
-void cAST::Driver::add_word( const std::string &word ) {
-  words++;
-  chars += word.length();
-  for(const char &c : word ){
-    if( islower( c ) )
-    {
-      lowercase++;
-    }
-    else if ( isupper( c ) )
-    {
-      uppercase++;
-    }
+// void cAST::Driver::push_declaration(std::unique_ptr<AST::Decl> node) {
+//   ensure_root();
+//   head_->declarations.emplace_back(std::move(node));
+// }
+
+// void cAST::Driver::report_error(const std::string& message) {
+//   had_error_ = true;
+//   diags_.push_back(Diag{ -1, -1, message });
+// }
+
+// void cAST::Driver::report_error(int line, int column, const std::string& message) {
+//   had_error_ = true;
+//   diags_.push_back(Diag{ line, column, message });
+// }
+
+void cAST::Driver::dump_ast(std::ostream& os) const {
+  if (!head_) {
+    os << "<no AST>\n"; return;
   }
+  os << "AST Dump:\n";
+  // head_->dump(os, 0);
+  // AST::print(*head_, os);
 }
 
-void cAST::Driver::add_newline() {
-  lines++;
-  chars++;
-}
-
-void cAST::Driver::add_char() {
-  chars++;
-}
-
-std::ostream& cAST::Driver::print( std::ostream &stream ){
-  stream << red  << "Results: " << norm << "\n";
-  stream << blue << "Uppercase: " << norm << uppercase << "\n";
-  stream << blue << "Lowercase: " << norm << lowercase << "\n";
-  stream << blue << "Lines: " << norm << lines << "\n";
-  stream << blue << "Words: " << norm << words << "\n";
-  stream << blue << "Characters: " << norm << chars << "\n";
-  return(stream);
+void cAST::Driver::dump_diagnostics(std::ostream& os) const {
+  for (const auto& d : diags_) {
+    if (d.line >= 0)
+      os << source_name_ << ":" << d.line << ":" << d.col << ": error: " << d.msg << "\n";
+    else
+      os << source_name_ << ": error: " << d.msg << "\n";
+  }
 }

@@ -14,6 +14,7 @@ ADD_FLEX_BISON_DEPENDENCY(lexer parser)
 add_executable(
   nrc
     main.cpp
+    ast.cpp
     driver.cpp
 
     ${FLEX_lexer_OUTPUTS}

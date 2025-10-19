@@ -21,7 +21,14 @@ int main( const int argc, const char **argv ) {
   cAST::Driver driver;
 
   driver.parse(argv[1]);
-  driver.print(std::cout) << "\n";
+
+  if (driver.had_error()) {
+    driver.dump_diagnostics(std::cerr);
+    return 2;
+  }
+
+  driver.dump_ast(std::cout);
+  // driver.print(std::cout) << "\n";
 
   return (EXIT_SUCCESS);
 }

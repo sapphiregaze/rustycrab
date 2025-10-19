@@ -1,5 +1,5 @@
-#include "ast.h"
-using namespace cAST;
+#include "ast.hpp"
+using namespace AST;
 
 void BuiltinType::accept(ASTWalker &v){ v.visit(*this); }
 void PointerType::accept(ASTWalker &v){ v.visit(*this); }
@@ -60,6 +60,9 @@ static const char* builtinToString(BUILTIN_TYPE b){
     case BUILTIN_TYPE::Void: return "void";
     case BUILTIN_TYPE::Bool: return "_Bool";
     case BUILTIN_TYPE::Char: return "char";
+    case BUILTIN_TYPE::Complex: return "complex";
+    case BUILTIN_TYPE::Generic: return "generic";
+    case BUILTIN_TYPE::Imaginary: return "imaginary";
     case BUILTIN_TYPE::Schar: return "signed char";
     case BUILTIN_TYPE::Uchar: return "unsigned char";
     case BUILTIN_TYPE::Short: return "short";
@@ -81,7 +84,7 @@ struct Printer : ASTWalker {
   std::ostream &os;
   int indent{0};
 
-  Printer(std::ostream &output) : os(output) {}
+  explicit Printer(std::ostream &output) : os(output) {}
 
   void printQual(std::vector<TYPE_QUALIFIER> q){
     for(auto qual : q){
@@ -90,6 +93,7 @@ struct Printer : ASTWalker {
         case TYPE_QUALIFIER::Restrict: os << "restrict "; break;
         case TYPE_QUALIFIER::Volatile: os << "volatile "; break;
         case TYPE_QUALIFIER::Atomic: os << "_Atomic "; break;
+        default: break;
       }
     }
   }
@@ -365,7 +369,8 @@ struct Printer : ASTWalker {
 
 };
 
-void print(ASTNode &n, std::ostream &os){
+void print(const ASTNode &n, std::ostream &os){
   Printer p{os};
-  n.accept(p);
+  // n.accept(p);
+  const_cast<ASTNode&>(n).accept(p);
 }
