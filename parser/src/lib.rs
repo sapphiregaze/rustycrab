@@ -641,6 +641,16 @@ token_parser!(comma, Token::Comma);
 token_parser!(ellipsis, Token::Ellipsis);
 token_parser!(assign, Token::Assign);
 token_parser!(ptr_op, Token::PtrOp);
+token_parser!(if_token, Token::If);
+token_parser!(else_token, Token::Else);
+token_parser!(switch_token, Token::Switch);
+token_parser!(while_token, Token::While);
+token_parser!(do_token, Token::Do);
+token_parser!(for_token, Token::For);
+token_parser!(goto_token, Token::Goto);
+token_parser!(continue_token, Token::Continue);
+token_parser!(break_token, Token::Break);
+token_parser!(return_token, Token::Return);
 token_parser!(enum_token, Token::Enum);
 token_parser!(case_token, Token::Case);
 token_parser!(default_token, Token::Default);
@@ -2220,7 +2230,7 @@ where
   recursive(|statement| {
     choice((
       labeled_statement(statement.clone()),
-      compound_statement(statement.clone()),
+      compound_statement(),
       expression_statement(statement.clone()),
       selection_statement(statement.clone()),
       iteration_statement(statement.clone()),
@@ -2267,37 +2277,65 @@ where
 }
 
 fn compound_statement<'tokens, 'src: 'tokens, I>(
-  statement: impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 ) -> impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  block_item_list()
+    .or_not()
+    .delimited_by(left_brace(), right_brace())
+    .map_with(|list_option, e| {
+      (Stmt::Compound(
+        CompoundStmt { 
+          items: match list_option {
+            Some(list) => list.clone().into_iter().map(|(item, _span)| item).collect()
+            _ => Vec::new()
+          }
+        }
+      ), e.span())
+    })
 }
 
 fn block_item_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<BlockItem>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  block_item()
+    .repeated()
+    .at_least(1)
+    .collect()
 }
 
 fn block_item<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<BlockItem>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  choice((
+    declaration()
+      .map_with(|(declaration, _declaration_span), e| {
+        (BlockItem::Decl(declaration), e.span())
+      }),
+    
+    statement()
+      .map_with(|(statement, _statement_span), e| {
+        (BlockItem::Stmt(statement), e.span())
+      }),
+  ))
 }
 
 fn expression_statement<'tokens, 'src: 'tokens, I>(
-  statement: impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 ) -> impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  expression()
+    .or_not()
+    .then_ignore(semicolon())
+    .map_with(|expr_option, e| {
+      (Stmt::Expr(expr_option.map(|expr| expr.0)), e.span())
+    })
 }
 
 fn selection_statement<'tokens, 'src: 'tokens, I>(
@@ -2306,7 +2344,37 @@ fn selection_statement<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  choice((
+    if_token()
+      .ignore_then(
+        expression().delimited_by(left_paren(), right_paren())
+      ).then(statement.clone())
+      .then(
+        else_token()
+          .ignore_then(statement.clone())
+          .or_not()
+      ).map_with(|(((expr, _expr_span), (then_stmt, _then_stmt_span)), else_option), e| {
+        (Stmt::If { 
+          condition: expr, 
+          then_stmt: Box::new(then_stmt), 
+          else_stmt: match else_option {
+            Some((else_stmt, _else_span)) =>  Some(Box::new(else_stmt)),
+            _ => None
+          }
+        }, e.span())
+      }),
+
+    switch_token()
+      .ignore_then(
+        expression().delimited_by(left_paren(), right_paren())
+      ).then(statement.clone())
+      .map_with(|((expr, _expr_span), (stmt, _stmt_span)), e| {
+        (Stmt::Switch { 
+          condition: expr, 
+          body: Box::new(stmt)
+        }, e.span())
+      }),
+  ))
 }
 
 fn iteration_statement<'tokens, 'src: 'tokens, I>(
