@@ -322,18 +322,22 @@ declaration_specifiers
       { $$ = ast.combineSpecs(ast.makeSpecsFromType(/*qual to type*/ ast.makeBuiltinType(/*qual-as-type or wrap*/, @1.first_line)), $2); /* or fold into specs.tq */ }
   | type_qualifier
       { $$ = ast.makeSpecsFromType(/*qual*/ ast.makeBuiltinType(/*...*/, @1.first_line)); }
-  | storage_class_specifier declaration_specifiers
-      { $$ = ast.combineSpecs(ast.makeSpecsFromType(/*storage wraps*/ nullptr), $2); }
-  | storage_class_specifier
-      { $$ = ast.makeSpecsFromType(/*storage*/ nullptr); }
+  /*storage wraps*/
+  /* | storage_class_specifier declaration_specifiers */
+      /* { $$ = ast.combineSpecs(ast.makeSpecsFromType( nullptr), $2); } */
+  /*storage*/
+  /* | storage_class_specifier */
+      /* { $$ = ast.makeSpecsFromType(nullptr); } */
   | function_specifier declaration_specifiers
       { $$ = ast.combineSpecs(ast.makeSpecsFromType(/*fn spec*/ nullptr), $2); }
   | function_specifier
       { $$ = ast.makeSpecsFromType(/*fn spec*/ nullptr); }
-  | alignment_specifier declaration_specifiers
-      { $$ = ast.combineSpecs(ast.makeSpecsFromType(/*align*/ nullptr), $2); }
-  | alignment_specifier
-      { $$ = ast.makeSpecsFromType(/*align*/ nullptr); }
+  /* | alignment_specifier declaration_specifiers */
+      /*align*/
+      /* { $$ = ast.combineSpecs(ast.makeSpecsFromType( nullptr), $2); } */
+      /*align*/
+  /* | alignment_specifier */
+      /* { $$ = ast.makeSpecsFromType( nullptr); } */
   ;
 
 init_declarator_list
@@ -370,16 +374,16 @@ storage_class_specifier
 type_specifier
 	: VOID { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Void, @1.first_line); }
 	| CHAR { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Char, @1.first_line); }
-	| SHORT { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Short, @1.first_line); }
+	/* | SHORT { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Short, @1.first_line); } */
 	| INT { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Int, @1.first_line); }
 	| LONG { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Long, @1.first_line); }
 	| FLOAT { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Float, @1.first_line); }
 	| DOUBLE { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Double, @1.first_line); }
-	| SIGNED { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Signed, @1.first_line); }
-	| UNSIGNED { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Unsigned, @1.first_line); }
+	/* | SIGNED { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Signed, @1.first_line); } */
+	/* | UNSIGNED { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Unsigned, @1.first_line); } */
 	| BOOL { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Bool, @1.first_line); }
-	| COMPLEX { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Complex, @1.first_line); }
-	| IMAGINARY { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Imaginary, @1.first_line); }
+	/* | COMPLEX { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Complex, @1.first_line); } */
+	/* | IMAGINARY { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Imaginary, @1.first_line); } */
 	/* | atomic_type_specifier { $$ = std::move($1); } */
 	/* | struct_or_union_specifier { $$ = std::move($1); } */
 	/* | enum_specifier { $$ = std::move($1); } */
@@ -665,7 +669,7 @@ iteration_statement
   ;
 
 jump_statement
-  : GOTO IDENTIFIER ';'            { $$ = ast.makeGoto(*$2, @1); }
+  /* : GOTO IDENTIFIER ';'            { $$ = ast.makeGoto(*$2, @1); } */
   | CONTINUE ';'                   { $$ = ast.makeContinue(@1); }
   | BREAK ';'                      { $$ = ast.makeBreak(@1); }
   | RETURN ';'                     { $$ = ast.makeReturn(nullptr, @1); }
