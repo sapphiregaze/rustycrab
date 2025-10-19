@@ -82,7 +82,6 @@ static const char* builtinToString(BUILTIN_TYPE b){
 
 struct Printer : ASTWalker {
   std::ostream &os;
-  int indent{0};
 
   explicit Printer(std::ostream &output) : os(output) {}
 
@@ -358,10 +357,12 @@ struct Printer : ASTWalker {
   // }
 
   void visit(DeclStmt &s) override {
+    std::cout << "Visiting DeclStmt" << std::endl;
     if(s.declaration) s.declaration->accept(*this);
   }
 
   void visit(TranslationUnit &tu) override {
+    std::cout << "Visiting TranslationUnit" << std::endl;
     for(auto &decl : tu.declarations){
       if(decl) decl->accept(*this);
     }
@@ -369,8 +370,7 @@ struct Printer : ASTWalker {
 
 };
 
-void print(const ASTNode &n, std::ostream &os){
+void AST::prettyprint(ASTNode &n, std::ostream &os){
   Printer p{os};
-  // n.accept(p);
-  const_cast<ASTNode&>(n).accept(p);
+  n.accept(p);
 }

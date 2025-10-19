@@ -1,11 +1,26 @@
 #pragma once
 
 #include <string>
+#include <iostream>
 #include <ostream>
 #include <vector>
 #include <memory>
 
 namespace AST {
+
+enum class AssignOp {
+  Assign,
+  Mul,
+  Div,
+  Mod,
+  Add,
+  Sub,
+  Shl,
+  Shr,
+  And,
+  Xor,
+  Or
+};
 
 enum class BUILTIN_TYPE {
   Void,
@@ -109,13 +124,17 @@ struct SourceRange {
 struct ASTWalker;
 
 struct ASTNode {
+  ASTNode* parent = nullptr;
   SourceRange loc{};
   ~ASTNode() = default;
   virtual void accept(ASTWalker &v) = 0;
+
+  void set_parent(ASTNode* p) { parent = p; }
+  ASTNode* get_parent() const { return parent; }
 };
 
 // pretty printer
-void print(const ASTNode &n, std::ostream &os);
+void prettyprint(ASTNode &n, std::ostream &os);
 
 // // Types
 // struct BuiltinType;
@@ -310,6 +329,20 @@ struct FieldDecl : public Decl {
   void accept(ASTWalker &v) override;
 };
 
+  //   {
+  //     // Build AST::FunctionDecl(specs, declarator, body, locals = $3)
+  //     auto fn = std::make_unique<AST::FunctionDecl>(/* use $1, $2 */);
+  //     fn->set_body(std::move($4));                 // if your body is a Stmt unique_ptr
+  //     fn->set_locals(std::move($3));               // vector<unique_ptr<Decl>>
+  //     $$ = std::move(fn);                          // unique_ptr<Decl>
+  //   }
+  // | declaration_specifiers declarator compound_statement
+  //   {
+  //     auto fn = std::make_unique<AST::FunctionDecl>(/* use $1, $2 */);
+  //     fn->set_body(std::move($3));
+  //     $$ = std::move(fn);                          // unique_ptr<Decl>
+  //   }
+
 struct FunctionDecl : public Decl {
   std::string name;
   TypeNode* returnType;
@@ -318,6 +351,10 @@ struct FunctionDecl : public Decl {
   // indefinite arity;; idk if we implement tthat
   bool isVariadic{false};
   Stmt* body;
+  void set_body(Stmt* b) { body = b; }
+  void set_params(std::vector<std::unique_ptr<ParamDecl>> p) {
+    params = std::move(p);
+  }
   void accept(ASTWalker &v) override;
 };
 
