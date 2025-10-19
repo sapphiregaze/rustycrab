@@ -8,9 +8,6 @@ pub type Spanned<T> = (T, Span);
 // AST Node Types
 // ============================================================================
 
-/// A translation unit (C source file) is a list of external declarations
-pub type TranslationUnit = Vec<ExternalDecl>;
-
 /// Top-level declarations (functions, global variables, etc.)
 #[derive(Debug, Clone)]
 pub enum ExternalDecl {
@@ -494,7 +491,7 @@ pub enum Expr {
     // Compound literal (C99): (type){initializers}
     CompoundLiteral {
         type_name: Box<TypeName>,
-        initializers: Vec<Box<Initializer>>,
+        initializers: Vec<InitializerListItem>,
     },
 }
 
@@ -813,13 +810,13 @@ where
       left_paren()
         .ignore_then(type_name())
         .then_ignore(right_paren().then(left_brace()))
-        .then(initializer_list())
+        .then(initializer_list(initializer())) // TODO this might be some weird recursion problem
         .then_ignore(comma().or_not())
         .then_ignore(right_brace())
         .map(|((type_name, type_name_span), initializers)| {
           (Expr::CompoundLiteral { 
             type_name: Box::new(type_name), 
-            initializers: initializers.into_iter().map(|(initializer, _span)| Box::new(initializer)).collect()
+            initializers: initializers.into_iter().map(|(initializer, _span)| initializer).collect()
           }, type_name_span)
         })
     ))
@@ -2231,7 +2228,7 @@ where
     choice((
       labeled_statement(statement.clone()),
       compound_statement(),
-      expression_statement(statement.clone()),
+      expression_statement(),
       selection_statement(statement.clone()),
       iteration_statement(statement.clone()),
       jump_statement(statement.clone()),
@@ -2288,8 +2285,8 @@ where
       (Stmt::Compound(
         CompoundStmt { 
           items: match list_option {
-            Some(list) => list.clone().into_iter().map(|(item, _span)| item).collect()
-            _ => Vec::new()
+            Some(list) => list.clone().into_iter().map(|(item, _span)| item).collect(),
+            _ => Vec::new(),
           }
         }
       ), e.span())
@@ -2395,24 +2392,39 @@ where
   
 }
 
+/// A translation unit (C source file) is a list of external declarations
+pub type TranslationUnit = Vec<Spanned<ExternalDecl>>;
 fn translation_unit<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, TranslationUnit, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  external_declaration()
+    .repeated()
+    .at_least(1)
+    .collect()
 }
 
 fn external_declaration<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<ExternalDecl>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  choice((
+    function_definition()
+      .map_with(|(definition, _span), e| {
+        (ExternalDecl::FuncDef(definition), e.span())
+      }),
+
+    declaration()
+      .map_with(|(declaration, _span), e| {
+        (ExternalDecl::Decl(declaration), e.span())
+      }),
+  ))
 }
 
 fn function_definition<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<FunctionDefinition>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -2420,11 +2432,14 @@ where
 }
 
 fn declaration_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<Declaration>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  declaration()
+    .repeated()
+    .at_least(1)
+    .collect()
 }
 
 fn span_from_extra(extra: Extras) -> Span {
