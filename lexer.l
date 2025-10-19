@@ -1,8 +1,9 @@
 %{
-/* C++ string header, for string ops below */
+#include <cstring>
 #include <string>
+#include <climits>
 
-/* Implementation of yyFlexScanner */ 
+/* Implementation of yyFlexScanner */
 #include "scanner.hpp"
 #undef  YY_DECL
 #define YY_DECL int cAST::cASTScanner::yylex( cAST::cASTParser::semantic_type * const lval, cAST::cASTParser::location_type *loc )
@@ -19,16 +20,19 @@ using token = cAST::cASTParser::token;
 /* update location on matching */
 #define YY_USER_ACTION loc->step(); loc->columns(yyleng);
 
-/* returns type from symbol table */
-extern int sym_type(const char *);
-
-/* with no symbol table, fake it */
-#define sym_type(identifier) token::IDENTIFIER
-
-int yyinput();
-
 static void comment(void);
-static int check_type(void);
+
+static inline int to_int_checked(const char* s, int base) {
+  errno = 0;
+  long v = std::strtol(s, nullptr, base);
+  if (errno == ERANGE || v < INT_MIN || v > INT_MAX) {
+    // clamp or report via driver if you prefer
+    if (v < INT_MIN) v = INT_MIN;
+    if (v > INT_MAX) v = INT_MAX;
+  }
+  return static_cast<int>(v);
+}
+
 %}
 
 %option debug
@@ -36,13 +40,6 @@ static int check_type(void);
 %option yyclass="cAST::cASTScanner"
 %option noyywrap
 %option c++
-
-%e  1019
-%p  2807
-%n  371
-%k  284
-%a  1213
-%o  1117
 
 O   [0-7]
 D   [0-9]
@@ -61,6 +58,10 @@ ES  (\\(['"\?\\abfnrtv]|[0-7]{1,3}|x[a-fA-F0-9]+))
 WS  [ \t\v\n\f]
 
 %%
+
+%{ /** Code executed at the beginning of yylex **/
+  yylval = lval;
+%}
 
 "/*"                                    { comment(); }
 "//".*                                    { /* consume //-comment */ }
@@ -111,21 +112,58 @@ WS  [ \t\v\n\f]
 "_Thread_local"                         { return token::THREAD_LOCAL; }
 "__func__"                              { return token::FUNC_NAME; }
 
-{L}{A}*					{ return check_type(); }
+{L}{A}* {
+    yylval->build<std::string>( yytext );
+    return token::IDENTIFIER;
+  }
 
-{HP}{H}+{IS}?				{ return token::I_CONSTANT; }
-{NZ}{D}*{IS}?				{ return token::I_CONSTANT; }
-"0"{O}*{IS}?				{ return token::I_CONSTANT; }
-{CP}?"'"([^'\\\n]|{ES})+"'"		{ return token::I_CONSTANT; }
+{HP}{H}+{IS}? {
+    yylval->build<int>( to_int_checked( yytext, 16 ) );
+    return token::I_CONSTANT;
+  }
+{NZ}{D}*{IS}? {
+    yylval->build<int>( to_int_checked( yytext, 10 ) );
+    return token::I_CONSTANT;
+  }
+"0"{O}*{IS}? {
+    yylval->build<int>( to_int_checked( YYText(), 8 ) );
+    return token::I_CONSTANT;
+  }
+{CP}?"'"([^'\\\n]|{ES})+"'" {
+    char* endptr;
+    yylval->build<int>( static_cast<int>( std::strtol( yytext + 1, &endptr, 0 ) ) );
+    return token::I_CONSTANT;
+  }
 
-{D}+{E}{FS}?				{ return token::F_CONSTANT; }
-{D}*"."{D}+{E}?{FS}?			{ return token::F_CONSTANT; }
-{D}+"."{E}?{FS}?			{ return token::F_CONSTANT; }
-{HP}{H}+{P}{FS}?			{ return token::F_CONSTANT; }
-{HP}{H}*"."{H}+{P}{FS}?			{ return token::F_CONSTANT; }
-{HP}{H}+"."{P}{FS}?			{ return token::F_CONSTANT; }
+{D}+{E}{FS}? {
+    yylval->build<double>( std::stod(yytext) );
+    return token::F_CONSTANT;
+  }
+{D}*"."{D}+{E}?{FS}? {
+    yylval->build<double>( std::stod(yytext) );
+    return token::F_CONSTANT;
+  }
+{D}+"."{E}?{FS}? {
+    yylval->build<double>( std::stod(yytext) );
+    return token::F_CONSTANT;
+  }
+{HP}{H}+{P}{FS}? {
+    yylval->build<double>( std::stod(yytext) );
+    return token::F_CONSTANT;
+  }
+{HP}{H}*"."{H}+{P}{FS}? {
+    yylval->build<double>( std::stod(yytext) );
+    return token::F_CONSTANT;
+  }
+{HP}{H}+"."{P}{FS}? {
+    yylval->build<double>( std::stod(yytext) );
+    return token::F_CONSTANT;
+  }
 
-({SP}?\"([^"\\\n]|{ES})*\"{WS}*)+	{ return token::STRING_LITERAL; }
+({SP}?\"([^"\\\n]|{ES})*\"{WS}*)+	{
+    yylval->build<std::string>( yytext );
+    return token::STRING_LITERAL;
+  }
 
 "..."					{ return token::ELLIPSIS; }
 ">>="					{ return token::RIGHT_ASSIGN; }
@@ -181,32 +219,4 @@ WS  [ \t\v\n\f]
 
 static void comment(void) {
   return;
-  int c;
-  while ((c = yyinput()) != 0) {
-    if (c == '*') {
-      while ((c = yyinput()) == '*');
-      if (c == '/')
-        return;
-      if (c == 0)
-        break;
-    }
-  }
-  // yyerror("unterminated comment");
-}
-
-static int check_type(void) {
-  switch (sym_type(yytext)) {
-
-  /* previously defined */
-  case token::TYPEDEF_NAME:
-    return token::TYPEDEF_NAME;
-
-  /* previously defined */
-  case token::ENUMERATION_CONSTANT:
-    return token::ENUMERATION_CONSTANT;
-
-  /* includes undefined */
-  default:
-    return token::IDENTIFIER;
-  }
 }
