@@ -20,6 +20,7 @@ pub enum ExternalDecl {
 pub struct FunctionDefinition {
     pub specifiers: Vec<DeclarationSpecifier>,
     pub declarator: Declarator,
+    pub declarations: Vec<Declaration>,
     pub body: CompoundStmt,
 }
 
@@ -2231,7 +2232,7 @@ where
       expression_statement(),
       selection_statement(statement.clone()),
       iteration_statement(statement.clone()),
-      jump_statement(statement.clone()),
+      jump_statement(),
     ))
   })
 }
@@ -2380,16 +2381,114 @@ fn iteration_statement<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  choice((
+    while_token()
+      .ignore_then(
+        expression()
+          .delimited_by(left_paren(), right_paren())
+      ).then(statement.clone())
+      .map_with(|((expr, _expr_span), (stmt, _stmt_span)), e| {
+        (Stmt::While { 
+          condition: expr, 
+          body: Box::new(stmt) 
+        }, e.span())
+      }),
+
+    do_token()
+      .ignore_then(statement.clone())
+      .then_ignore(while_token())
+      .then(
+        expression()
+          .delimited_by(left_paren(), right_paren())
+      ).then_ignore(semicolon())
+      .map_with(|((stmt, _stmt_span), (expr, _expr_span)), e| {
+        (Stmt::DoWhile { 
+          body: Box::new(stmt), 
+          condition: expr 
+        }, e.span())
+      }),
+
+    for_token()
+      .ignore_then(
+        expression_statement()
+          .then(expression_statement())
+          .then(expression().or_not())
+      ).delimited_by(left_paren(), right_paren())
+      .then(statement.clone())
+      .map_with(|((((init_stmt, _init_stmt_span), (cond_stmt, _cond_stmt_span)), update_expr_option), (stmt, _stmt_span)), e| {
+        (Stmt::For { 
+          init: Some(ForInit::Expr(
+            match init_stmt {
+              Stmt::Expr(expr) => expr.unwrap(),
+              _ => panic!("expected expression for loop initializer!")
+            }
+          )), 
+          condition: match cond_stmt {
+              Stmt::Expr(expr) => expr,
+              _ => panic!("expected expression for loop condition!")
+            }, 
+          increment: update_expr_option.map(|option| option.0), 
+          body: Box::new(stmt) 
+        }, e.span())
+      }),
+
+    for_token()
+      .ignore_then(
+        declaration()
+          .then(expression_statement())
+          .then(expression().or_not())
+      ).delimited_by(left_paren(), right_paren())
+      .then(statement.clone())
+      .map_with(|((((init_decl, _init_decl_span), (cond_stmt, _cond_stmt_span)), update_expr_option), (stmt, _stmt_expr)), e| {
+        (Stmt::For { 
+          init: Some(ForInit::Decl(init_decl)),
+          condition: match cond_stmt {
+              Stmt::Expr(expr) => expr,
+              _ => panic!("expected expression for loop condition!")
+            }, 
+          increment: update_expr_option.map(|option| option.0), 
+          body: Box::new(stmt) 
+        }, e.span())
+      }),
+  ))
 }
 
 fn jump_statement<'tokens, 'src: 'tokens, I>(
-  statement: impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 ) -> impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  choice((
+    goto_token()
+      .ignore_then(identifier())
+      .then_ignore(semicolon())
+      .map_with(|(identifier, _span), e| {
+        (Stmt::Goto(extract_identifier!(identifier)), e.span())
+      }),
+
+    continue_token()
+      .then(semicolon())
+      .ignored()
+      .map_with(|_, e| {
+        (Stmt::Continue, e.span())
+      }),
+
+    break_token()
+      .then(semicolon())
+      .ignored()
+      .map_with(|_, e| {
+        (Stmt::Break, e.span())
+      }),
+
+    return_token()
+      .ignore_then(expression().or_not())
+      .then_ignore(semicolon())
+      .map_with(|expr_option, e| {
+        (Stmt::Return(
+          expr_option.map(|expr| expr.0)
+        ), e.span())
+      }),
+  ))
 }
 
 /// A translation unit (C source file) is a list of external declarations
@@ -2428,7 +2527,24 @@ fn function_definition<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  declaration_specifiers()
+    .then(declarator())
+    .then(declaration_list().or_not())
+    .then(compound_statement())
+    .map_with(|(((specifiers, (declarator, _declarator_span)), declarations_option), (compound, _compound_span)), e| {
+      (FunctionDefinition{
+        specifiers: specifiers.clone().into_iter().map(|(specifier, _span)| specifier).collect(),
+        declarator: declarator,
+        declarations: match declarations_option {
+          Some(declarations) => declarations.into_iter().map(|(declaration, _span)| declaration).collect(),
+          _ => Vec::new()
+        },
+        body: match compound {
+          Stmt::Compound(stmt) => stmt,
+          _ => CompoundStmt { items: Vec::new() }
+        },
+      }, e.span())
+    })
 }
 
 fn declaration_list<'tokens, 'src: 'tokens, I>(
