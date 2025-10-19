@@ -2114,19 +2114,45 @@ fn initializer<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  choice((
+    initializer_list()
+      .map_with(|| {
+        
+      })
+
+    assignment_expression()
+      .map_with(|| {
+        
+      })
+  )) 
 }
 
 fn initializer_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Vec<Spanned<Initializer>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<InitializerListItem>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-  
+  designation().or_not()
+    .then(initializer())
+    .separated_by(comma())
+    .allow_trailing()
+    .at_least(1)
+    .collect()
+    .map(|list: Vec<(Option<(Designation, SimpleSpan)>, (Initializer, SimpleSpan))>| {
+      list.clone().into_iter().map(|(designation_option, (init, init_span))| {
+        (InitializerListItem{
+          designation: match designation_option {
+            Some(designation) => Some(designation.0),
+            _ => None
+          },
+          initializer: init
+        }, init_span) // TODO this needs to somehow also include designation span
+      }).collect()
+    })
 }
 
 fn designation<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<Designation>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -2134,7 +2160,7 @@ where
 }
 
 fn designator_list<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Vec<Spanned<Designation>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -2142,7 +2168,7 @@ where
 }
 
 fn designator<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+) -> impl Parser<'tokens, I, Spanned<Designator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
