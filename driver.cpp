@@ -26,8 +26,7 @@ void cAST::Driver::parse( const char * const filename )
 
 void cAST::Driver::parse( std::istream &stream )
 {
-  if( ! stream.good()  && stream.eof() )
-  {
+  if( ! stream.good()  && stream.eof() ) {
     return;
   }
   //else
@@ -38,32 +37,33 @@ void cAST::Driver::parse( std::istream &stream )
 
 void cAST::Driver::parse_helper( std::istream &stream )
 {
-   delete(scanner);
-   try {
-    scanner = new cAST::cASTScanner( &stream );
-   }
-   catch( std::bad_alloc &ba )
-   {
-      std::cerr << "Failed to allocate scanner: (" << ba.what() << "), exiting!!\n";
-      exit( EXIT_FAILURE );
-   }
+  delete(scanner);
+  try {
+  scanner = new cAST::cASTScanner( &stream );
+  }
+  catch( std::bad_alloc &ba ) {
+    std::cerr << "Failed to allocate scanner: (" << ba.what() << "), exiting!!\n";
+    exit( EXIT_FAILURE );
+  }
 
-   delete(parser);
-   try {
-      parser = new cAST::cASTParser( (*scanner) /* scanner */, (*this) /* driver */ );
-   }
-   catch( std::bad_alloc &ba )
-   {
-      std::cerr << "Failed to allocate parser: (" << 
-         ba.what() << "), exiting!!\n";
-      exit( EXIT_FAILURE );
-   }
-   const int accept( 0 );
-   if( parser->parse() != accept )
-   {
-      std::cerr << "Parse failed!!\n";
-   }
-   return;
+  delete(parser);
+  try {
+  parser = new cAST::cASTParser( (*scanner) /* scanner */, (*this) /* driver */ );
+  }
+  catch( std::bad_alloc &ba ) {
+    std::cerr << "Failed to allocate parser: (" << ba.what() << "), exiting!!\n";
+    exit( EXIT_FAILURE );
+  }
+  const int accept = 0;
+  const int rc = parser->parse();
+  if( rc != accept ) {
+    std::cerr << "Parse failed with code: " << rc << std::endl;
+  }
+  return;
+}
+
+void cAST::Driver::print_custom_message(const std::string &message) {
+  std::cout << message << std::endl;
 }
 
 void cAST::Driver::add_upper() {
