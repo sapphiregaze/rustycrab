@@ -30,6 +30,8 @@ enum class BUILTIN_TYPE {
   UInt,
   Float,
   Double,
+  Unsigned,
+  Signed,
   Long_Double,
   Char,
   Schar,
@@ -242,7 +244,25 @@ struct TypeNode;
 struct DeclSpecs {
   std::vector<TYPE_STORAGE_QUALIFIER> storage;
   std::vector<TYPE_QUALIFIER> qualifiers;
-  std::unique_ptr<TypeNode> type;
+  BUILTIN_TYPE type;
+
+  void set_from_builtin_type(BUILTIN_TYPE bt) {
+    type = bt;
+  }
+
+  void set_from_type_node(std::unique_ptr<TypeNode> typeNode) {
+    type = BUILTIN_TYPE::Int;
+
+    // // For simplicity, only handle BuiltinType here
+    // if (auto* bt = dynamic_cast<BuiltinType*>(typeNode.get())) {
+    //   type = bt->type;
+    //   qualifiers = bt->qualifiers;
+    // }
+    // Handle other TypeNode derived types as needed
+  }
+  // std::unique_ptr<TypeNode> type;
+  bool isInline{false};
+  bool isNoreturn{false};
 };
 
 // expressions
@@ -252,6 +272,10 @@ struct Expr : public ASTNode {
 
 struct IntegerLiteral : Expr {
   std::string literal;
+  void set_value(int val) {
+    literal = std::to_string(val);
+    intValue = val;
+  }
   int intValue;
   void accept(ASTWalker &v) override;
 };
@@ -259,11 +283,18 @@ struct IntegerLiteral : Expr {
 struct FloatingLiteral : Expr {
   std::string literal;
   double floatValue;
+  void set_value(float val) {
+    literal = std::to_string(val);
+    floatValue = val;
+  }
   void accept(ASTWalker &v) override;
 };
 
 struct IdentifierExpr : Expr {
   std::string literal;
+  void set_name(const std::string& name) {
+    literal = name;
+  }
   void accept(ASTWalker &v) override;
 };
 
@@ -384,6 +415,9 @@ struct NullStmt : public Stmt {
 
 struct ExprStmt : public Stmt {
   std::unique_ptr<Expr> expr;
+  void set_expr(std::unique_ptr<Expr> e) {
+    expr = std::move(e);
+  }
   void accept(ASTWalker &v) override;
 };
 
@@ -431,16 +465,31 @@ struct Decl : public ASTNode {
   virtual ~Decl() = default;
 };
 
-struct VarSpecifiers {
-  std::vector<TYPE_STORAGE_QUALIFIER> storage;
-  bool isInline{false};
-  bool isNoreturn{false};
+struct DeclStmt : public Stmt {
+  std::unique_ptr<Decl> declaration;
+  void set_decl(std::unique_ptr<Decl> decl) {
+    declaration = std::move(decl);
+  }
+  void accept(ASTWalker &v) override;
 };
 struct VarDecl : public Decl {
   std::string name;
   std::unique_ptr<TypeNode> type;
   std::unique_ptr<Expr> init;
-  VarSpecifiers specs;
+  std::unique_ptr<DeclSpecs> specs;
+
+  void set_type(std::unique_ptr<TypeNode> t) {
+    type = std::move(t);
+  }
+
+  void set_init(std::unique_ptr<Expr> i) {
+    init = std::move(i);
+  }
+
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
+    specs = std::move(s);
+  }
+
   void accept(ASTWalker &v) override;
 };
 
@@ -473,11 +522,6 @@ struct FunctionDecl : public Decl {
   void set_params(std::vector<std::unique_ptr<ParamDecl>> p) {
     params = std::move(p);
   }
-  void accept(ASTWalker &v) override;
-};
-
-struct DeclStmt : public Stmt {
-  std::unique_ptr<Decl> declaration;
   void accept(ASTWalker &v) override;
 };
 

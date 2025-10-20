@@ -39,7 +39,6 @@ public:
   cAST::Expr* makeBinary(cAST::BINARY_OPERATOR op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right);
   cAST::Expr* makeUnary(cAST::UNARY_OPERATOR op, std::unique_ptr<cAST::Expr> expr);
   cAST::Expr* makeIdentifierExpr(const std::string& name);
-  cAST::Expr* singleton(std::unique_ptr<cAST::Expr> expr);
   cAST::Expr* makeCast(std::unique_ptr<cAST::TypeNode> type, std::unique_ptr<cAST::Expr> expr);
   cAST::Expr* makeCond(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Expr> thenExpr, std::unique_ptr<cAST::Expr> elseExpr);
   cAST::Expr* makeConstantIntExpr(int value);
@@ -48,8 +47,16 @@ public:
   cAST::Expr* makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer);
   cAST::Expr* makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index);
   cAST::Expr* makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args);
+  cAST::Stmt* makeNullStmt();
+  cAST::Stmt* makeExprStmt(std::unique_ptr<cAST::Expr> expr);
+  cAST::Stmt* makeCompoundStmt(std::vector<std::unique_ptr<cAST::Stmt>> stmts);
+  cAST::DeclSpecs makeSpecsFromBuiltinType(cAST::BUILTIN_TYPE bt);
+  cAST::DeclSpecs makeSpecsFromTypeQual(cAST::TYPE_QUALIFIER tq);
+  cAST::DeclSpecs makeSpecsFromStorageClass(cAST::TYPE_STORAGE_QUALIFIER sc);
+  cAST::Decl* makeDeclFromSpecs(cAST::DeclSpecs specs);
+  cAST::Stmt* makeDeclStmt(std::unique_ptr<cAST::Decl> decl);
 
-  cAST::DeclSpecs makeSpecsFromType(std::unique_ptr<cAST::TypeNode> type);
+  cAST::DeclSpecs makeSpecsFromTypeNode(std::unique_ptr<cAST::TypeNode> type);
   cAST::DeclSpecs combineSpecs(cAST::DeclSpecs a, cAST::DeclSpecs b);
 
   void dump_ast(std::ostream& os);

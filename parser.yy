@@ -78,6 +78,7 @@
 %type <cAST::AssignOp> assignment_operator
 %type <cAST::TYPE_STORAGE_QUALIFIER> storage_class_specifier
 %type <cAST::TYPE_QUALIFIER> type_qualifier
+%type <cAST::BUILTIN_TYPE> type_specifier
 
 %type <std::unique_ptr<cAST::Stmt>>
   statement compound_statement
@@ -90,7 +91,7 @@
 
 %type <cAST::DeclSpecs> declaration_specifiers specifier_qualifier_list
 
-%type <cAST::TypeNode*> type_specifier type_name
+%type <cAST::TypeNode*> type_name
 
 %type <std::unique_ptr<cAST::Decl>> declarator direct_declarator pointer
 
@@ -245,18 +246,19 @@ expression
 
 declaration
   : declaration_specifiers ';' {
-    driver.makeStringLiteral("testing testing 123");
+    // driver.makeDeclStmt(driver.makeDeclFromSpecs($1));
+    driver.makeDeclFromSpecs($1);
   }
   /* | declaration_specifiers init_declarator_list ';' */
   ;
 
 declaration_specifiers
-  : type_specifier
-  /* | type_qualifier
-  | storage_class_specifier
-  | declaration_specifiers type_specifier
-  | declaration_specifiers type_qualifier
-  | declaration_specifiers storage_class_specifier */
+  : type_specifier { $$ = driver.makeSpecsFromBuiltinType($1); }
+  | type_qualifier { $$ = driver.makeSpecsFromTypeQual($1); }
+  | storage_class_specifier { $$ = driver.makeSpecsFromStorageClass($1); }
+  /* | declaration_specifiers type_specifier */
+  /* | declaration_specifiers type_qualifier */
+  /* | declaration_specifiers storage_class_specifier */
   ;
 
 storage_class_specifier
@@ -269,18 +271,18 @@ storage_class_specifier
   ;
 
 type_specifier
-  : VOID { $$ = driver.makeBuiltinType(cAST::BUILTIN_TYPE::Void); }
-  | CHAR { $$ = driver.makeBuiltinType(cAST::BUILTIN_TYPE::Char); }
-  /* | SHORT { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Short, @1.first_line); } */
-  | INT { $$ = driver.makeBuiltinType(cAST::BUILTIN_TYPE::Int); }
-  | LONG { $$ = driver.makeBuiltinType(cAST::BUILTIN_TYPE::Long); }
-  | FLOAT { $$ = driver.makeBuiltinType(cAST::BUILTIN_TYPE::Float); }
-  | DOUBLE { $$ = driver.makeBuiltinType(cAST::BUILTIN_TYPE::Double); }
-  /* | SIGNED { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Signed, @1.first_line); } */
-  /* | UNSIGNED { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Unsigned, @1.first_line); } */
-  | BOOL { $$ = driver.makeBuiltinType(cAST::BUILTIN_TYPE::Bool); }
-  /* | COMPLEX { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Complex, @1.first_line); } */
-  /* | IMAGINARY { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Imaginary, @1.first_line); } */
+  : VOID { $$ = cAST::BUILTIN_TYPE::Void; }
+  | CHAR { $$ = cAST::BUILTIN_TYPE::Char; }
+  | SHORT { $$ = cAST::BUILTIN_TYPE::Short; }
+  | INT { $$ = cAST::BUILTIN_TYPE::Int; }
+  | LONG { $$ = cAST::BUILTIN_TYPE::Long; }
+  | FLOAT { $$ = cAST::BUILTIN_TYPE::Float; }
+  | DOUBLE { $$ = cAST::BUILTIN_TYPE::Double; }
+  | SIGNED { $$ = cAST::BUILTIN_TYPE::Signed; }
+  | UNSIGNED { $$ = cAST::BUILTIN_TYPE::Unsigned; }
+  | BOOL { $$ = cAST::BUILTIN_TYPE::Bool; }
+  | COMPLEX { $$ = cAST::BUILTIN_TYPE::Complex; }
+  | IMAGINARY { $$ = cAST::BUILTIN_TYPE::Imaginary; }
   ;
 
 type_qualifier
@@ -338,10 +340,10 @@ type_name
   ;
 
 specifier_qualifier_list
-	: type_specifier specifier_qualifier_list { $$ = driver.combineSpecs(driver.makeSpecsFromType(std::move($1)), $2); }
-	| type_specifier { $$ = driver.makeSpecsFromType(std::move($1)); }
-	| type_qualifier specifier_qualifier_list { $$ = driver.combineSpecs(driver.makeSpecsFromType(driver.makeBuiltinType()), $2); }
-	| type_qualifier { $$ = driver.makeSpecsFromType(driver.makeBuiltinType()); }
+	: type_specifier specifier_qualifier_list { $$ = driver.combineSpecs(driver.makeSpecsFromTypeNode(std::move($1)), $2); }
+	| type_specifier { $$ = driver.makeSpecsFromTypeNode(std::move($1)); }
+	| type_qualifier specifier_qualifier_list { $$ = driver.combineSpecs(driver.makeSpecsFromTypeNode(driver.makeBuiltinType()), $2); }
+	| type_qualifier { $$ = driver.makeSpecsFromTypeNode(driver.makeBuiltinType()); }
 	;
 
 initializer
@@ -406,10 +408,8 @@ jump_statement
 
 translation_unit
 	: external_declaration {
-      // driver.push_declaration(std::move($1));
     }
 	| translation_unit external_declaration {
-      // driver.push_declaration(std::move($2));
     }
 	;
 

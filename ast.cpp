@@ -51,6 +51,8 @@ static const char* builtinToString(BUILTIN_TYPE b){
     case BUILTIN_TYPE::Bool: return "_Bool";
     case BUILTIN_TYPE::Char: return "char";
     case BUILTIN_TYPE::Complex: return "complex";
+    case BUILTIN_TYPE::Signed: return "signed";
+    case BUILTIN_TYPE::Unsigned: return "unsigned";
     case BUILTIN_TYPE::Generic: return "generic";
     case BUILTIN_TYPE::Imaginary: return "imaginary";
     case BUILTIN_TYPE::Schar: return "signed char";
@@ -302,9 +304,10 @@ struct Printer : ASTWalker {
     indent();
     os << "Variable Declaration: ";
     setIndentLevel(indentLevel + 2);
-    printStorage(d.specs.storage);
-    if(d.specs.isInline) os << "inline ";
-    if(d.specs.isNoreturn) os << "_Noreturn ";
+    auto& specs = *d.specs;
+    printStorage(specs.storage);
+    if(specs.isInline) os << "inline ";
+    if(specs.isNoreturn) os << "_Noreturn ";
     if(d.type) d.type->accept(*this);
 
     if(!d.name.empty()) os << " " << d.name;
