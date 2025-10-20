@@ -1,1 +1,6 @@
 void main;
+char c, b, a;
+int i;
+long l;
+float f;
+int;

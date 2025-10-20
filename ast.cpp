@@ -154,6 +154,30 @@ struct Printer : ASTWalker {
     return "?";
   }
 
+  void printSpecs(const DeclSpecs& specs){
+    for(auto sc : specs.storage){
+      switch(sc){
+        case TYPE_STORAGE_QUALIFIER::Typedef: os << "typedef "; break;
+        case TYPE_STORAGE_QUALIFIER::Static: os << "static "; break;
+        case TYPE_STORAGE_QUALIFIER::Extern: os << "extern "; break;
+        case TYPE_STORAGE_QUALIFIER::Register: os << "register "; break;
+        case TYPE_STORAGE_QUALIFIER::Auto: os << "auto "; break;
+        case TYPE_STORAGE_QUALIFIER::Thread_Local: os << "_Thread_local "; break;
+        case TYPE_STORAGE_QUALIFIER::None: break;
+      }
+    }
+    for(auto tq : specs.qualifiers){
+      switch(tq){
+        case TYPE_QUALIFIER::Const: os << "const "; break;
+        case TYPE_QUALIFIER::Restrict: os << "restrict "; break;
+        case TYPE_QUALIFIER::Volatile: os << "volatile "; break;
+        case TYPE_QUALIFIER::Atomic: os << "_Atomic "; break;
+        case TYPE_QUALIFIER::None: break;
+      }
+    }
+    os << builtinToString(specs.type);
+  }
+
   void visit(UnaryExpr &e) override {
     switch(e.op){
       case UNARY_OPERATOR::INCREMENT: if(e.operand){ e.operand->accept(*this); os << "++";} break;
@@ -277,7 +301,6 @@ struct Printer : ASTWalker {
   void visit(ExprStmt &s) override {
     indent();
     os << "Expression Statement: ";
-    setIndentLevel(indentLevel + 2);
     if(s.expr) s.expr->accept(*this);
     os << ";\n";
   }
@@ -285,7 +308,6 @@ struct Printer : ASTWalker {
   void visit(IfStmt &s) override {
     indent();
     os << "If Statement:\n";
-    setIndentLevel(indentLevel + 2);
     os << "if (";
     if(s.cond) s.cond->accept(*this);
     os << ") ";
@@ -303,12 +325,8 @@ struct Printer : ASTWalker {
   void visit(VarDecl &d) override {
     indent();
     os << "Variable Declaration: ";
-    setIndentLevel(indentLevel + 2);
     auto& specs = *d.specs;
-    printStorage(specs.storage);
-    if(specs.isInline) os << "inline ";
-    if(specs.isNoreturn) os << "_Noreturn ";
-    if(d.type) d.type->accept(*this);
+    printSpecs(specs);
 
     if(!d.name.empty()) os << " " << d.name;
 
@@ -322,7 +340,6 @@ struct Printer : ASTWalker {
   void visit(ParamDecl &d) override {
     indent();
     os << "Parameter Declaration:\n";
-    setIndentLevel(indentLevel + 2);
     if(d.type) d.type->accept(*this);
     if(!d.name.empty()) os << " " << d.name;
     if(d.isVariadic) os << " ...";
@@ -331,7 +348,6 @@ struct Printer : ASTWalker {
   void visit(FieldDecl &d) override {
     indent();
     os << "Field Declaration: ";
-    setIndentLevel(indentLevel + 2);
     if(d.type) d.type->accept(*this);
     if(!d.name.empty()) os << " " << d.name;
     // if(d.bitWidth && *d.bitWidth){
@@ -344,7 +360,6 @@ struct Printer : ASTWalker {
   void visit(FunctionDecl &d) override {
     indent();
     os << "Function Declaration:\n";
-    setIndentLevel(indentLevel + 2);
     if(d.return_type) d.return_type->accept(*this);
     os << " " << d.name << "(";
 

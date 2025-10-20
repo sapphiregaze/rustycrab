@@ -93,7 +93,9 @@
 
 %type <cAST::TypeNode*> type_name
 
-%type <std::unique_ptr<cAST::Decl>> declarator direct_declarator pointer
+%type <cAST::Decl*> declarator direct_declarator pointer init_declarator
+
+%type <std::vector<cAST::Decl*>> init_declarator_list;
 
 %type <std::vector<std::unique_ptr<cAST::ParamDecl>>> parameter_list parameter_type_list
 %type <std::unique_ptr<cAST::ParamDecl>> parameter_declaration
@@ -249,13 +251,22 @@ declaration
     // driver.makeDeclStmt(driver.makeDeclFromSpecs($1));
     driver.makeDeclFromSpecs($1);
   }
-  /* | declaration_specifiers init_declarator_list ';' */
+  | declaration_specifiers init_declarator_list ';' {
+    // driver.makeInitDeclList(std::move($1));
+    driver.makeDeclListFromSpecsAndInits($1, std::move($2));
+  }
   ;
 
 declaration_specifiers
-  : type_specifier { $$ = driver.makeSpecsFromBuiltinType($1); }
-  | type_qualifier { $$ = driver.makeSpecsFromTypeQual($1); }
-  | storage_class_specifier { $$ = driver.makeSpecsFromStorageClass($1); }
+  : type_specifier {
+    $$ = driver.makeSpecsFromBuiltinType($1);
+  }
+  | type_qualifier {
+    $$ = driver.makeSpecsFromTypeQual($1);
+  }
+  | storage_class_specifier {
+    $$ = driver.makeSpecsFromStorageClass($1);
+  }
   /* | declaration_specifiers type_specifier */
   /* | declaration_specifiers type_qualifier */
   /* | declaration_specifiers storage_class_specifier */
@@ -293,32 +304,34 @@ type_qualifier
   ;
 
 init_declarator_list
-  : init_declarator
-  | init_declarator_list ',' init_declarator
+  : init_declarator {
+    $$ = std::vector<cAST::Decl*>{ std::move($1) };
+  }
+  | init_declarator_list ',' init_declarator { $1.emplace_back(std::move($3)); $$ = std::move($1); }
   ;
 
 init_declarator
-  : declarator
-  | declarator '=' initializer
+  : declarator { $$ = std::move($1); }
+  /* | declarator '=' initializer */
   ;
 
 declarator
-  : pointer direct_declarator { $$ = driver.wrapPointer($2); /* wrap chain already in $1 or combine both; adjust */ }
-  | direct_declarator { $$ = std::move($1); }
+  : direct_declarator { $$ = std::move($1); }
+  /* | pointer direct_declarator { $$ = driver.wrapPointer($2); } */
   ;
 
-pointer
+/* pointer
   : '*' { $$ = driver.wrapPointer(cAST::ParamDecl{}); }
   | '*' pointer { $$ = driver.wrapPointer($2); }
   | '*' type_qualifier pointer
-  | '*' type_qualifier         /* optional */
-  ;
+  | '*' type_qualifier
+  ; */
 
 direct_declarator
-  : IDENTIFIER { $$ = driver.makeIdentDeclarator(*$1); }
-  | '(' declarator ')' { $$ = std::move($2); }
-  | direct_declarator '(' ')' { $$ = driver.wrapFunction($1, {}, false); }
-  | direct_declarator '(' parameter_type_list ')' { $$ = driver.wrapFunction($1, std::move($3), {}, @2); }
+  : IDENTIFIER { $$ = driver.makeIdentDeclarator($1); }
+  /* | '(' declarator ')' { $$ = std::move($2); } */
+  /* | direct_declarator '(' ')' { $$ = driver.wrapFunction($1, {}, false); } */
+  /* | direct_declarator '(' parameter_type_list ')' { $$ = driver.wrapFunction($1, std::move($3), {}, @2); } */
   ;
 
 parameter_type_list

@@ -134,6 +134,20 @@ cAST::Expr* cAST::Driver::makeCond(std::unique_ptr<cAST::Expr> cond, std::unique
   return static_cast<cAST::Expr*>(condExpr);
 }
 
+cAST::Decl* cAST::Driver::makeIdentDeclarator(const std::string& name) {
+  cAST::ASTNode* parent = head();
+  assert(parent && "ensure_root failed to provide a parent");
+  if (!parent) throw std::logic_error("No valid parent at head() for identifier declarator");
+
+  auto* decl = new cAST::VarDecl();
+  decl->name = name;
+
+  // auto* decl = parent->emplace_child<cAST::VarDecl>();
+  // decl->name = name;
+
+  return static_cast<cAST::Decl*>(decl);
+}
+
 cAST::Expr* cAST::Driver::makeIdentifierExpr(const std::string& name) {
   cAST::ASTNode* parent = head();
   assert(parent && "ensure_root failed to provide a parent");
@@ -239,6 +253,23 @@ cAST::Decl* cAST::Driver::makeDeclFromSpecs(cAST::DeclSpecs specs) {
   decl->set_specs(std::make_unique<cAST::DeclSpecs>(std::move(specs)));
 
   return static_cast<cAST::Decl*>(decl);
+}
+
+cAST::Decl* cAST::Driver::makeDeclListFromSpecsAndInits(cAST::DeclSpecs specs, std::vector<cAST::Decl*> initDecls) {
+  cAST::ASTNode* parent = head();
+  assert(parent && "ensure_root failed to provide a parent");
+  if (!parent) throw std::logic_error("No valid parent at head() for declaration list from specs and inits");
+
+  for (auto* decl : initDecls) {
+    if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(decl)) {
+      varDecl->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
+      parent->add_child(std::unique_ptr<cAST::ASTNode>(varDecl));
+    } else {
+      throw std::logic_error("Expected VarDecl in initDecls");
+    }
+  }
+
+  return nullptr; // or some appropriate return value
 }
 
 cAST::Stmt* cAST::Driver::makeDeclStmt(std::unique_ptr<cAST::Decl> decl) {
