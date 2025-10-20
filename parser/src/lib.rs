@@ -111,12 +111,14 @@ macro_rules! extract_identifier {
 // *****************************************************************************
 // ************************************************
 
-fn primary_expression<'tokens, 'src: 'tokens, I>()
+fn primary_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    choice((identifier(), constant(), string(), expression().delimited_by(left_paren(), right_paren())))
+    choice((identifier(), constant(), string(), expression(assign.clone()).delimited_by(left_paren(), right_paren())))
 }
 
 fn constant<'tokens, 'src: 'tokens, I>()
@@ -158,14 +160,16 @@ where
 }
 
 // TODO fix all the spans that do not include the extra stuff after
-fn postfix_expression<'tokens, 'src: 'tokens, I>()
+fn postfix_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     // primary expression or compound literal
     let atom = choice((
-        primary_expression(),
+        primary_expression(assign.clone()),
         // compound literals
         left_paren()
             .ignore_then(type_name())
@@ -187,7 +191,7 @@ where
     // postfix operations that can be applied repeatedly
     let postfix_op = choice((
         // array access
-        expression().delimited_by(left_bracket(), right_bracket()).map(|(index, _index_span)| {
+        expression(assign.clone()).delimited_by(left_bracket(), right_bracket()).map(|(index, _index_span)| {
             Box::new(move |(expr, span): Spanned<Expr>| {
                 (Expr::ArrayAccess { array: Box::new(expr), index: Box::new(index.clone()) }, span)
             }) as Box<dyn Fn(Spanned<Expr>) -> Spanned<Expr>>
@@ -199,7 +203,7 @@ where
             }) as Box<dyn Fn(Spanned<Expr>) -> Spanned<Expr>>
         }),
         // function call w/ arguments
-        argument_expression_list().delimited_by(left_paren(), right_paren()).map(|args| {
+        argument_expression_list(assign.clone()).delimited_by(left_paren(), right_paren()).map(|args| {
             Box::new(move |(expr, span): Spanned<Expr>| {
                 (
                     Expr::FunctionCall {
@@ -242,22 +246,26 @@ where
     atom.foldl(postfix_op.repeated(), |expr, op| op(expr))
 }
 
-fn argument_expression_list<'tokens, 'src: 'tokens, I>()
+fn argument_expression_list<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Vec<Spanned<Expr>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    assignment_expression().separated_by(comma()).at_least(1).collect()
+    assign.clone().separated_by(comma()).at_least(1).collect()
 }
 
-fn unary_expression<'tokens, 'src: 'tokens, I>()
+fn unary_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|unary| {
         choice((
-            postfix_expression(),
+            postfix_expression(assign.clone()),
             // preincrement
             inc().ignore_then(unary.clone()).map(|(unary, unary_span)| {
                 (Expr::UnaryOp { op: UnaryOperator::PreIncrement, operand: Box::new(unary) }, unary_span)
@@ -267,7 +275,7 @@ where
                 (Expr::UnaryOp { op: UnaryOperator::PreDecrement, operand: Box::new(unary) }, unary_span)
             }),
             // cast expression
-            unary_operator().then(cast_expression()).map(|((unary_op, unary_op_span), (cast, _cast_span))| {
+            unary_operator().then(cast_expression(assign.clone())).map(|((unary_op, unary_op_span), (cast, _cast_span))| {
                 if let Expr::Cast { type_name, expr } = cast {
                     (
                         Expr::UnaryOp {
@@ -300,14 +308,16 @@ where
     }
 }
 
-fn cast_expression<'tokens, 'src: 'tokens, I>()
+fn cast_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|cast_expr| {
         choice((
-            unary_expression(),
+            unary_expression(assign.clone()),
             left_paren().ignore_then(type_name()).then_ignore(right_paren()).then(cast_expr.clone()).map(
                 |((type_name, type_name_span), (cast_expr, _cast_expr_span))| {
                     (Expr::Cast { type_name: Box::new(type_name), expr: Box::new(cast_expr) }, type_name_span)
@@ -317,14 +327,16 @@ where
     })
 }
 
-fn multiplicative_expression<'tokens, 'src: 'tokens, I>()
+fn multiplicative_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    cast_expression().foldl(
+    cast_expression(assign.clone()).foldl(
         choice((star().to(BinaryOperator::Mul), slash().to(BinaryOperator::Div), percent().to(BinaryOperator::Mod)))
-            .then(cast_expression())
+            .then(cast_expression(assign.clone()))
             .repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
@@ -332,14 +344,16 @@ where
     )
 }
 
-fn additive_expression<'tokens, 'src: 'tokens, I>()
+fn additive_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    multiplicative_expression().foldl(
+    multiplicative_expression(assign.clone()).foldl(
         choice((plus().to(BinaryOperator::Add), minus().to(BinaryOperator::Sub)))
-            .then(multiplicative_expression())
+            .then(multiplicative_expression(assign.clone()))
             .repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
@@ -347,14 +361,16 @@ where
     )
 }
 
-fn shift_expression<'tokens, 'src: 'tokens, I>()
+fn shift_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    additive_expression().foldl(
+    additive_expression(assign.clone()).foldl(
         choice((left_op().to(BinaryOperator::ShiftLeft), right_op().to(BinaryOperator::ShiftRight)))
-            .then(additive_expression())
+            .then(additive_expression(assign.clone()))
             .repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
@@ -362,19 +378,21 @@ where
     )
 }
 
-fn relational_expression<'tokens, 'src: 'tokens, I>()
+fn relational_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    shift_expression().foldl(
+    shift_expression(assign.clone()).foldl(
         choice((
             lt().to(BinaryOperator::LessThan),
             gt().to(BinaryOperator::GreaterThan),
             lte().to(BinaryOperator::LessEqual),
             gte().to(BinaryOperator::GreaterEqual),
         ))
-        .then(shift_expression())
+        .then(shift_expression(assign.clone()))
         .repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
@@ -382,14 +400,16 @@ where
     )
 }
 
-fn equality_expression<'tokens, 'src: 'tokens, I>()
+fn equality_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    relational_expression().foldl(
+    relational_expression(assign.clone()).foldl(
         choice((eq().to(BinaryOperator::Equal), ne().to(BinaryOperator::NotEqual)))
-            .then(relational_expression())
+            .then(relational_expression(assign.clone()))
             .repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
@@ -397,82 +417,94 @@ where
     )
 }
 
-fn and_expression<'tokens, 'src: 'tokens, I>()
+fn and_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    equality_expression().foldl(
-        amp().to(BinaryOperator::BitwiseAnd).then(equality_expression()).repeated(),
+    equality_expression(assign.clone()).foldl(
+        amp().to(BinaryOperator::BitwiseAnd).then(equality_expression(assign.clone())).repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
         },
     )
 }
 
-fn exclusive_or_expression<'tokens, 'src: 'tokens, I>()
+fn exclusive_or_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    and_expression().foldl(
-        caret().to(BinaryOperator::BitwiseXor).then(and_expression()).repeated(),
+    and_expression(assign.clone()).foldl(
+        caret().to(BinaryOperator::BitwiseXor).then(and_expression(assign.clone())).repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
         },
     )
 }
 
-fn inclusive_or_expression<'tokens, 'src: 'tokens, I>()
+fn inclusive_or_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    exclusive_or_expression().foldl(
-        pipe().to(BinaryOperator::BitwiseOr).then(exclusive_or_expression()).repeated(),
+    exclusive_or_expression(assign.clone()).foldl(
+        pipe().to(BinaryOperator::BitwiseOr).then(exclusive_or_expression(assign.clone())).repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
         },
     )
 }
 
-fn logical_and_expression<'tokens, 'src: 'tokens, I>()
+fn logical_and_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    inclusive_or_expression().foldl(
-        and_op().to(BinaryOperator::LogicalAnd).then(inclusive_or_expression()).repeated(),
+    inclusive_or_expression(assign.clone()).foldl(
+        and_op().to(BinaryOperator::LogicalAnd).then(inclusive_or_expression(assign.clone())).repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
         },
     )
 }
 
-fn logical_or_expression<'tokens, 'src: 'tokens, I>()
+fn logical_or_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    logical_and_expression().foldl(
-        or_op().to(BinaryOperator::LogicalOr).then(logical_and_expression()).repeated(),
+    logical_and_expression(assign.clone()).foldl(
+        or_op().to(BinaryOperator::LogicalOr).then(logical_and_expression(assign.clone())).repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
         },
     )
 }
 
-fn conditional_expression<'tokens, 'src: 'tokens, I>()
+fn conditional_expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|cond| {
         choice((
-            logical_or_expression(),
-            logical_or_expression()
+            logical_or_expression(assign.clone()),
+            logical_or_expression(assign.clone())
                 .then_ignore(question())
-                .then(expression())
+                .then(expression(assign.clone()))
                 .then_ignore(colon())
                 .then(cond.clone())
                 // NOTE: the names in this map are a bit confusion due to the name of the grammar
@@ -496,10 +528,10 @@ fn assignment_expression<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|assign_expr| {
+    recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|assign| {
         choice((
-            conditional_expression(),
-            unary_expression().then(assignment_operator()).then(assign_expr.clone()).map(
+            conditional_expression(assign.clone()),
+            unary_expression(assign.clone()).then(assignment_operator()).then(assign.clone()).map(
                 |(((cond_expr, cond_span), (assign_op, _assign_op_span)), (assign_expr, _assign_expr_span))| {
                     (
                         Expr::Assignment { op: assign_op, lvalue: Box::new(cond_expr), rvalue: Box::new(assign_expr) },
@@ -531,22 +563,27 @@ where
     }
 }
 
-fn expression<'tokens, 'src: 'tokens, I>()
+fn expression<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    assignment_expression().separated_by(comma()).at_least(1).collect().map(|list: Vec<Spanned<Expr>>| {
+    assign.clone().separated_by(comma()).at_least(1).collect().map(|list: Vec<Spanned<Expr>>| {
         (Expr::Sequence(list.clone().into_iter().map(|(expr, _span)| Box::new(expr)).collect()), list.clone()[0].1)
     })
 }
 
-fn constant_expression<'tokens, 'src: 'tokens, I>()
+fn constant_expression<'tokens, 'src: 'tokens, I>(
+
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    conditional_expression()
+    // TODO i think this is the problem? or at least part of it
+    conditional_expression(assignment_expression())
 }
 
 fn declaration<'tokens, 'src: 'tokens, I>()
@@ -664,7 +701,8 @@ where
               Token::Bool(extra) => (TypeSpecifier::Bool, span_from_extra(extra)),
               Token::Complex(extra) => (TypeSpecifier::Complex, span_from_extra(extra)),
             },
-            struct_or_union_specifier_inner(type_spec.clone()),
+            // TODO causing recursion issues
+            // struct_or_union_specifier_inner(type_spec.clone()),
             enum_specifier_inner(type_spec.clone()),
         ))
     })
@@ -1611,7 +1649,7 @@ fn expression_statement<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    expression()
+    expression(assignment_expression())
         .or_not()
         .then_ignore(semicolon())
         .map_with(|expr_option, e| (Stmt::Expr(expr_option.map(|expr| expr.0)), e.span()))
@@ -1625,7 +1663,7 @@ where
 {
     choice((
         if_token()
-            .ignore_then(expression().delimited_by(left_paren(), right_paren()))
+            .ignore_then(expression(assignment_expression()).delimited_by(left_paren(), right_paren()))
             .then(statement.clone())
             .then(else_token().ignore_then(statement.clone()).or_not())
             .map_with(|(((expr, _expr_span), (then_stmt, _then_stmt_span)), else_option), e| {
@@ -1642,7 +1680,7 @@ where
                 )
             }),
         switch_token()
-            .ignore_then(expression().delimited_by(left_paren(), right_paren()))
+            .ignore_then(expression(assignment_expression()).delimited_by(left_paren(), right_paren()))
             .then(statement.clone())
             .map_with(|((expr, _expr_span), (stmt, _stmt_span)), e| {
                 (Stmt::Switch { condition: expr, body: Box::new(stmt) }, e.span())
@@ -1658,7 +1696,7 @@ where
 {
     choice((
         while_token()
-            .ignore_then(expression().delimited_by(left_paren(), right_paren()))
+            .ignore_then(expression(assignment_expression()).delimited_by(left_paren(), right_paren()))
             .then(statement.clone())
             .map_with(|((expr, _expr_span), (stmt, _stmt_span)), e| {
                 (Stmt::While { condition: expr, body: Box::new(stmt) }, e.span())
@@ -1666,13 +1704,13 @@ where
         do_token()
             .ignore_then(statement.clone())
             .then_ignore(while_token())
-            .then(expression().delimited_by(left_paren(), right_paren()))
+            .then(expression(assignment_expression()).delimited_by(left_paren(), right_paren()))
             .then_ignore(semicolon())
             .map_with(|((stmt, _stmt_span), (expr, _expr_span)), e| {
                 (Stmt::DoWhile { body: Box::new(stmt), condition: expr }, e.span())
             }),
         for_token()
-            .ignore_then(expression_statement().then(expression_statement()).then(expression().or_not()))
+            .ignore_then(expression_statement().then(expression_statement()).then(expression(assignment_expression()).or_not()))
             .delimited_by(left_paren(), right_paren())
             .then(statement.clone())
             .map_with(
@@ -1699,7 +1737,7 @@ where
                 },
             ),
         for_token()
-            .ignore_then(declaration().then(expression_statement()).then(expression().or_not()))
+            .ignore_then(declaration().then(expression_statement()).then(expression(assignment_expression()).or_not()))
             .delimited_by(left_paren(), right_paren())
             .then(statement.clone())
             .map_with(
@@ -1738,7 +1776,7 @@ where
         continue_token().then(semicolon()).ignored().map_with(|_, e| (Stmt::Continue, e.span())),
         break_token().then(semicolon()).ignored().map_with(|_, e| (Stmt::Break, e.span())),
         return_token()
-            .ignore_then(expression().or_not())
+            .ignore_then(expression(assignment_expression()).or_not())
             .then_ignore(semicolon())
             .map_with(|expr_option, e| (Stmt::Return(expr_option.map(|expr| expr.0)), e.span())),
     ))
