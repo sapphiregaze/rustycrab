@@ -683,8 +683,14 @@ translation_unit
 	;
 
 external_declaration
-  : function_definition { $$ = std::move($1); }
-  | declaration { $$ = std::move($1); }
+  : function_definition {
+      std::cout << "Function definition parsed." << std::endl;
+      $$ = std::move($1);
+    }
+  | declaration {
+      std::cout << "Declaration parsed." << std::endl;
+      $$ = std::move($1);
+    }
   ;
 
 function_definition

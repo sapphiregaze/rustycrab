@@ -163,6 +163,7 @@ AST::TypeNode* cAST::Driver::push_type(std::unique_ptr<TypeNode> node) {
 }
 
 AST::Expr* cAST::Driver::makeBinary(AST::BINARY_OPERATOR op, std::unique_ptr<AST::Expr> left, std::unique_ptr<AST::Expr> right) {
+  std::cout << "Making binary expr with op " << static_cast<int>(op) << "\n";
   auto node = std::make_unique<AST::BinaryExpr>(op);
   node->set_parent(head());
   AST::Expr* raw = node.get();
