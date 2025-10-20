@@ -64,15 +64,15 @@
 %token ALIGNAS ALIGNOF ATOMIC GENERIC NORETURN STATIC_ASSERT THREAD_LOCAL
 
 %type <std::unique_ptr<cAST::Expr>>
-  primary_expression constant string initializer
-  postfix_expression unary_expression cast_expression
-  multiplicative_expression additive_expression shift_expression
+  initializer cast_expression multiplicative_expression additive_expression
   relational_expression equality_expression and_expression
   exclusive_or_expression inclusive_or_expression
-  logical_and_expression logical_or_expression
+  logical_and_expression logical_or_expression shift_expression
   conditional_expression assignment_expression expression
 
-%type <std::vector<std::unique_ptr<cAST::Expr>>> argument_expression_list initializer_list
+%type <cAST::Expr*> primary_expression constant string
+
+%type <std::vector<std::unique_ptr<cAST::Expr>>> argument_expression_list initializer_list postfix_expression unary_expression
 
 %type <cAST::UNARY_OPERATOR> unary_operator
 %type <cAST::AssignOp> assignment_operator
@@ -108,7 +108,7 @@ primary_expression
   : IDENTIFIER { $$ = driver.makeIdentifierExpr(*$1); }
   | constant { $$ = std::move($1); }
   | string { $$ = std::move($1); }
-  | '(' expression ')' { $$ = std::move($2); }
+  /* | '(' expression ')' { $$ = std::move($2); } */
   ;
 
 constant
@@ -122,25 +122,25 @@ string
 
 postfix_expression
   : primary_expression { $$ = std::move($1); }
-  | postfix_expression '[' expression ']' { $$ = driver.makeSubscript(std::move($1), std::move($3)); }
-  | postfix_expression '(' ')' { $$ = driver.makeCall(std::move($1), {}); }
-  | postfix_expression '(' argument_expression_list ')' { $$ = driver.makeCall(std::move($1), std::move($3)); }
-  | postfix_expression '.' IDENTIFIER { $$ = driver.makeMember(std::move($1), *$3, false); }
-  | postfix_expression PTR_OP IDENTIFIER { $$ = driver.makeMember(std::move($1), *$3, true); }
-  | postfix_expression INC_OP { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::POST_INC, std::move($1)); }
-  | postfix_expression DEC_OP { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::POST_DEC, std::move($1)); }
+  /* | postfix_expression '[' expression ']' { $$ = driver.makeSubscript(std::move($1), std::move($3)); } */
+  /* | postfix_expression '(' ')' { $$ = driver.makeCall(std::move($1), {}); } */
+  /* | postfix_expression '(' argument_expression_list ')' { $$ = driver.makeCall(std::move($1), std::move($3)); } */
+  /* | postfix_expression '.' IDENTIFIER { $$ = driver.makeMember(std::move($1), *$3, false); } */
+  /* | postfix_expression PTR_OP IDENTIFIER { $$ = driver.makeMember(std::move($1), *$3, true); } */
+  /* | postfix_expression INC_OP { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::POST_INC, std::move($1)); } */
+  /* | postfix_expression DEC_OP { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::POST_DEC, std::move($1)); } */
   ;
 
-argument_expression_list
+/* argument_expression_list
   : assignment_expression { $$ = driver.singleton(std::move($1)); }
   | argument_expression_list ',' assignment_expression { $1.emplace_back(std::move($3)); $$ = std::move($1); }
-  ;
+  ; */
 
 unary_expression
   : postfix_expression { $$ = std::move($1); }
-  | INC_OP unary_expression { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::PRE_INC, std::move($2)); }
-  | DEC_OP unary_expression { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::PRE_DEC, std::move($2)); }
-  | unary_operator cast_expression { $$ = driver.makeUnary($1, $2); }
+  /* | INC_OP unary_expression { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::PRE_INC, std::move($2)); } */
+  /* | DEC_OP unary_expression { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::PRE_DEC, std::move($2)); } */
+  /* | unary_operator cast_expression { $$ = driver.makeUnary($1, $2); } */
   /* | SIZEOF unary_expression                      { make it a builtin unary if you model it$$ = driver.makeUnary(AST::UnaryOp::SizeofExpr custom, std::move($2), @1); } */
   /* | SIZEOF '(' type_name ')'                     { $$ = driver.makeCast(sizeof-type as expr std::move($3), nullptr, @1); or a dedicated node } */
   /* | ALIGNOF '(' type_name ')'                    { $$ = driver.makeCast(alignof-type expr std::move($3), nullptr, @1); } */
@@ -157,7 +157,7 @@ unary_operator
 
 cast_expression
   : unary_expression { $$ = $1; }
-  | '(' type_name ')' cast_expression { $$ = driver.makeCast(std::move($2), std::move($4)); }
+  /* | '(' type_name ')' cast_expression { $$ = driver.makeCast(std::move($2), std::move($4)); } */
   ;
 
 multiplicative_expression
@@ -220,12 +220,23 @@ logical_or_expression
 
 conditional_expression
   : logical_or_expression { $$ = std::move($1); }
-  | logical_or_expression '?' expression ':' conditional_expression { $$ = driver.makeCond(std::move($1), std::move($3), std::move($5)); }
+  /* | logical_or_expression '?' expression ':' conditional_expression { $$ = driver.makeCond(std::move($1), std::move($3), std::move($5)); } */
   ;
 
 assignment_expression
-  : conditional_expression { $$ = std::move($1); }
-  | unary_expression assignment_operator assignment_expression { $$ = driver.makeAssign($2, std::move($1), std::move($3)); }
+  : conditional_expression {
+      std::cout << "Parsed conditional expression in assignment_expression." << std::endl;
+      $$ = std::move($1);
+    }
+    /* modify to have no recursion for testing */
+  | unary_expression assignment_operator conditional_expression {
+      std::cout << "Parsed assignment expression in assignment_expression." << std::endl;
+      $$ = driver.makeAssign($2, std::move($1), std::move($3));
+    }
+  /* | unary_expression assignment_operator assignment_expression {
+      std::cout << "Parsed assignment expression in assignment_expression." << std::endl;
+      $$ = driver.makeAssign($2, std::move($1), std::move($3));
+    } */
   ;
 
 assignment_operator
@@ -312,7 +323,7 @@ init_declarator_list
 
 init_declarator
   : declarator { $$ = std::move($1); }
-  /* | declarator '=' initializer */
+  | declarator '=' initializer
   ;
 
 declarator
@@ -361,13 +372,18 @@ specifier_qualifier_list
 
 initializer
   : assignment_expression { $$ = std::move($1); }
-  | '{' initializer_list '}' { $$ = driver.makeInitList(std::move($2), @1); }
-  | '{' initializer_list ',' '}' { $$ = driver.makeInitList(std::move($2), @1); }
+  /* | '{' initializer_list '}' { $$ = driver.makeInitList(std::move($2), @1); } */
+  /* | '{' initializer_list ',' '}' { $$ = driver.makeInitList(std::move($2), @1); } */
   ;
 
 initializer_list
-  : initializer { $$ = driver.singleton(std::move($1)); }
-  | initializer_list ',' initializer { $1.emplace_back(std::move($3)); $$ = std::move($1); }
+  : initializer {
+    $$ = std::vector<cAST::Expr*>{ std::move($1) };
+  }
+  | initializer_list ',' initializer {
+    $1.emplace_back(std::move($3));
+    $$ = std::move($1);
+  }
   ;
 
 statement

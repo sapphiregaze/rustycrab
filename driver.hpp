@@ -43,6 +43,7 @@ public:
   cAST::Expr* makeCond(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Expr> thenExpr, std::unique_ptr<cAST::Expr> elseExpr);
   cAST::Expr* makeConstantIntExpr(int value);
   cAST::Expr* makeConstantFloatExpr(float value);
+  cAST::Expr* makeAssign(cAST::AssignOp op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right);
   cAST::Expr* makeStringLiteral(const std::string& value);
   cAST::Expr* makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer);
   cAST::Expr* makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index);

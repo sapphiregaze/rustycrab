@@ -203,6 +203,7 @@ void prettyprint(ASTNode &n, std::ostream &os);
 // struct StringLiteral;
 // struct IdentifierExpr;
 // struct MemberExpr;
+// struct AssignExpr;
 // struct ArraySubscriptExpr;
 // struct CallExpr;
 // struct CastExpr;
@@ -353,6 +354,22 @@ struct CastExpr : public Expr {
   }
   void set_operand(std::unique_ptr<Expr> opd) {
     operand = std::move(opd);
+  }
+  void accept(ASTWalker &v) override;
+};
+
+struct AssignExpr : public Expr {
+  AssignOp op;
+  std::unique_ptr<Expr> left;
+  std::unique_ptr<Expr> right;
+  void set_op(AssignOp o) {
+    op = o;
+  }
+  void set_left(std::unique_ptr<Expr> l) {
+    left = std::move(l);
+  }
+  void set_right(std::unique_ptr<Expr> r) {
+    right = std::move(r);
   }
   void accept(ASTWalker &v) override;
 };
@@ -584,6 +601,7 @@ struct ASTWalker {
   virtual void visit(ArraySubscriptExpr&) {}
   virtual void visit(CallExpr&) {}
   virtual void visit(CastExpr&) {}
+  virtual void visit(AssignExpr&) {}
   virtual void visit(UnaryExpr&) {}
   virtual void visit(BinaryExpr&) {}
   virtual void visit(ConditionalExpr&) {}

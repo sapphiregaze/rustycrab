@@ -16,6 +16,7 @@ void MemberExpr::accept(ASTWalker &v){ v.visit(*this); }
 void ArraySubscriptExpr::accept(ASTWalker &v){ v.visit(*this); }
 void CallExpr::accept(ASTWalker &v){ v.visit(*this); }
 void CastExpr::accept(ASTWalker &v){ v.visit(*this); }
+void AssignExpr::accept(ASTWalker &v){ v.visit(*this); }
 void UnaryExpr::accept(ASTWalker &v){ v.visit(*this); }
 void BinaryExpr::accept(ASTWalker &v){ v.visit(*this); }
 void ConditionalExpr::accept(ASTWalker &v){ v.visit(*this); }
@@ -116,6 +117,23 @@ struct Printer : ASTWalker {
         case TYPE_STORAGE_QUALIFIER::None: break;
       }
     }
+  }
+
+  static const char* assignOpToString(AssignOp k){
+    switch(k){
+      case AssignOp::Assign: return "=";
+      case AssignOp::Mul: return "*=";
+      case AssignOp::Div: return "/=";
+      case AssignOp::Mod: return "%=";
+      case AssignOp::Add: return "+=";
+      case AssignOp::Sub: return "-=";
+      case AssignOp::Shl: return "<<=";
+      case AssignOp::Shr: return ">>=";
+      case AssignOp::And: return "&=";
+      case AssignOp::Xor: return "^=";
+      case AssignOp::Or: return "|=";
+    }
+    return "?";
   }
 
   static const char* binOpToString(BINARY_OPERATOR k){
@@ -256,11 +274,22 @@ struct Printer : ASTWalker {
   void visit(BinaryExpr &e) override {
     indent();
     os << "Binary Expression: ";
-    setIndentLevel(indentLevel + 2);
     if(e.left){
       e.left->accept(*this);
     }
     os << " " << binOpToString(e.op) << " ";
+    if(e.right) {
+      e.right->accept(*this);
+    }
+  }
+
+  void visit(AssignExpr &e) override {
+    indent();
+    os << "Assignment Expression: ";
+    if(e.left){
+      e.left->accept(*this);
+    }
+    os << " " << assignOpToString(e.op) << " ";
     if(e.right) {
       e.right->accept(*this);
     }

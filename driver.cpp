@@ -153,7 +153,10 @@ cAST::Expr* cAST::Driver::makeIdentifierExpr(const std::string& name) {
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for identifier expression");
 
-  auto* ident = parent->emplace_child<cAST::IdentifierExpr>();
+  // auto* ident = parent->emplace_child<cAST::IdentifierExpr>();
+  // ident->set_name(name);
+
+  auto* ident = new cAST::IdentifierExpr();
   ident->set_name(name);
 
   return static_cast<cAST::Expr*>(ident);
@@ -164,10 +167,13 @@ cAST::Expr* cAST::Driver::makeConstantIntExpr(int value) {
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for integer literal");
 
-  auto* lit = parent->emplace_child<cAST::IntegerLiteral>();
-  lit->set_value(value);
+  // auto* lit = parent->emplace_child<cAST::IntegerLiteral>();
+  // lit->set_value(value);
 
-  return static_cast<cAST::Expr*>(lit);
+  auto* ident = new cAST::IntegerLiteral();
+  ident->set_value(value);
+
+  return static_cast<cAST::Expr*>(ident);
 }
 
 cAST::Expr* cAST::Driver::makeConstantFloatExpr(float value) {
@@ -175,7 +181,10 @@ cAST::Expr* cAST::Driver::makeConstantFloatExpr(float value) {
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for floating literal");
 
-  auto* lit = parent->emplace_child<cAST::FloatingLiteral>();
+  // auto* lit = parent->emplace_child<cAST::FloatingLiteral>();
+  // lit->set_value(value);
+
+  auto* lit = new cAST::FloatingLiteral();
   lit->set_value(value);
 
   return static_cast<cAST::Expr*>(lit);
@@ -186,7 +195,7 @@ cAST::Expr* cAST::Driver::makeStringLiteral(const std::string& value) {
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for string literal");
 
-  auto* lit = parent->emplace_child<cAST::StringLiteral>();
+  auto* lit = new cAST::StringLiteral();
   lit->set_literal(value);
 
   return static_cast<cAST::Expr*>(lit);
@@ -197,7 +206,7 @@ cAST::Stmt* cAST::Driver::makeNullStmt() {
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for null statement");
 
-  auto* stmt = parent->emplace_child<cAST::NullStmt>();
+  auto* stmt = new cAST::NullStmt();
 
   return static_cast<cAST::Stmt*>(stmt);
 }
@@ -296,6 +305,19 @@ cAST::Expr* cAST::Driver::makeMember(std::unique_ptr<cAST::Expr> base, const std
   node->memberName = memberName;
   node->isPointer = isPointer;
   return raw;
+}
+
+cAST::Expr* cAST::Driver::makeAssign(cAST::AssignOp op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right) {
+  cAST::ASTNode* parent = head();
+  assert(parent && "ensure_root failed to provide a parent");
+  if (!parent) throw std::logic_error("No valid parent at head() for assignment expression");
+
+  auto* assign = parent->emplace_child<cAST::AssignExpr>();
+  assign->set_op(op);
+  assign->set_left(std::move(left));
+  assign->set_right(std::move(right));
+
+  return static_cast<cAST::Expr*>(assign);
 }
 
 cAST::Expr* cAST::Driver::makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index) {
