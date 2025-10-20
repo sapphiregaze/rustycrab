@@ -1354,74 +1354,91 @@ where
     })
 }
 
-// TODO left recursion
 fn direct_abstract_declarator<'tokens, 'src: 'tokens, I>()
 -> impl Parser<'tokens, I, Spanned<DirectAbstractDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(
-        |direct_abstract_declarator: Recursive<
-            dyn Parser<'_, I, Spanned<DirectAbstractDeclarator>, extra::Full<Rich<'tokens, Token>, (), ()>>,
-        >| {
-            choice((
-                // parenthesized declarator
-                left_paren().ignore_then(abstract_declarator()).then_ignore(right_paren()).map_with(
-                    |(declarator, _span), e| (DirectAbstractDeclarator::Declarator(Box::new(declarator)), e.span()),
+    recursive(|direct_abstract_declarator| {
+        // define the abstract_declarator parser inside the recursive scope
+        let abstract_declarator = pointer()
+            .map(|(p, _span)| p)
+            .or_not()
+            .then(direct_abstract_declarator.clone().or_not())
+            .map(|(pointer, direct)| AbstractDeclarator { pointer, direct: direct.map(|(d, _span)| d) });
+
+        let base = abstract_declarator
+            .delimited_by(left_paren(), right_paren())
+            .map_with(|abs_decl, e| (DirectAbstractDeclarator::Declarator(Box::new(abs_decl)), e.span()));
+
+        // parser for array suffixes
+        let array_suffix = left_bracket()
+            .ignore_then(choice((
+                // [ static qualifiers? expr ] or [ qualifiers? static expr ]
+                choice((
+                    static_token().ignore_then(type_qualifier_list().or_not()),
+                    type_qualifier_list().or_not().then_ignore(static_token()),
+                ))
+                .then(assignment_expression())
+                .map(|(qualifiers_opt, (expr, _))| ArrayDeclaratorType::Static {
+                    qualifiers: qualifiers_opt.map_or(Vec::new(), |qs| qs.into_iter().map(|(q, _)| q).collect()),
+                    size: Box::new(expr),
+                }),
+                // [ * ]
+                star().to(ArrayDeclaratorType::VariableLength { qualifiers: Vec::new() }),
+                // generic case: [ qualifiers? expr? ]
+                type_qualifier_list().or_not().then(assignment_expression().or_not()).map(
+                    |(qualifiers_opt, expr_opt)| {
+                        let qualifiers =
+                            qualifiers_opt.map_or(Vec::new(), |qs| qs.into_iter().map(|(q, _)| q).collect());
+                        match (expr_opt, qualifiers.is_empty()) {
+                            (Some((expr, _)), false) => ArrayDeclaratorType::Size { qualifiers, size: Box::new(expr) },
+                            (Some((expr, _)), true) => {
+                                ArrayDeclaratorType::Size { qualifiers: Vec::new(), size: Box::new(expr) }
+                            }
+                            (None, false) => ArrayDeclaratorType::Qualifiers(qualifiers),
+                            (None, true) => ArrayDeclaratorType::Empty,
+                        }
+                    },
                 ),
-                // empty array or variable length array
-                direct_abstract_declarator
-                    .clone()
-                    .or_not()
-                    .then_ignore(left_bracket())
-                    .then(star().or_not())
-                    .then_ignore(right_bracket())
-                    .map_with(|(direct_option, star_option), e| {
-                        (
-                            match star_option {
-                                Some(_) => DirectAbstractDeclarator::Array {
-                                    declarator: direct_option.map(|direct| Box::new(direct.0)),
-                                    array_type: ArrayDeclaratorType::VariableLength { qualifiers: Vec::new() },
-                                },
-                                None => DirectAbstractDeclarator::Array {
-                                    declarator: direct_option.map(|direct| Box::new(direct.0)),
-                                    array_type: ArrayDeclaratorType::Empty,
-                                },
-                            },
-                            e.span(),
-                        )
-                    }),
-                // static array
-                direct_abstract_declarator
-                    .clone()
-                    .or_not()
-                    .then_ignore(left_bracket())
-                    .then(choice((
-                        static_token().ignore_then(type_qualifier_list().or_not()),
-                        type_qualifier_list().or_not().then_ignore(static_token()),
-                    )))
-                    .then(assignment_expression())
-                    .then_ignore(right_bracket())
-                    .map_with(|((direct_option, qualifiers_option), (expr, _expr_span)), e| {
-                        (
-                            DirectAbstractDeclarator::Array {
-                                declarator: direct_option.map(|direct| Box::new(direct.0)),
-                                array_type: ArrayDeclaratorType::Static {
-                                    qualifiers: match qualifiers_option {
-                                        Some(qualifiers) => {
-                                            qualifiers.clone().into_iter().map(|(qualifier, _span)| qualifier).collect()
-                                        }
-                                        _ => Vec::new(),
-                                    },
-                                    size: Box::new(expr),
-                                },
-                            },
-                            e.span(),
-                        )
-                    }),
-            ))
-        },
-    )
+            )))
+            .then_ignore(right_bracket());
+
+        // parser for function suffixes
+        let function_suffix = parameter_list().delimited_by(left_paren(), right_paren());
+        let suffix = choice((
+            array_suffix
+                .map_with(|array_type, e| (DirectAbstractDeclarator::Array { declarator: None, array_type }, e.span())),
+            function_suffix.map_with(|params, e| {
+                let param_list = ParameterList {
+                    params: params.into_iter().map(|(p, _span)| p).collect(),
+                    variadic: false, // TODO: add parsing for '...' to set this correctly
+                };
+                (DirectAbstractDeclarator::Function { declarator: None, params: Some(param_list) }, e.span())
+            }),
+        ));
+
+        base.or_not()
+            .foldl(suffix.repeated(), |acc, (mut wrapper, wrapper_span)| {
+                let new_span = acc
+                    .as_ref()
+                    .map(|(_d, span): &(DirectAbstractDeclarator, Span)| span.union(wrapper_span))
+                    .unwrap_or(wrapper_span);
+
+                match &mut wrapper {
+                    DirectAbstractDeclarator::Array { declarator, .. } => {
+                        *declarator = acc.map(|(d, _)| Box::new(d));
+                    }
+                    DirectAbstractDeclarator::Function { declarator, .. } => {
+                        *declarator = acc.map(|(d, _)| Box::new(d));
+                    }
+                    _ => unreachable!(),
+                }
+
+                Some((wrapper, new_span))
+            })
+            .try_map(|opt, span| opt.ok_or_else(|| Rich::custom(span, "Expected a direct abstract declarator")))
+    })
 }
 
 fn initializer<'tokens, 'src: 'tokens, I>()
