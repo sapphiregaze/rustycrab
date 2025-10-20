@@ -849,25 +849,25 @@ fn type_specifier<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    choice((
-        select! {
-          Token::Void(extra) => (TypeSpecifier::Void, span_from_extra(extra)),
-          Token::Char(extra) => (TypeSpecifier::Char, span_from_extra(extra)),
-          Token::Short(extra) => (TypeSpecifier::Short, span_from_extra(extra)),
-          Token::Int(extra) => (TypeSpecifier::Int, span_from_extra(extra)),
-          Token::Long(extra) => (TypeSpecifier::Long, span_from_extra(extra)),
-          Token::Float(extra) => (TypeSpecifier::Float, span_from_extra(extra)),
-          Token::Double(extra) => (TypeSpecifier::Double, span_from_extra(extra)),
-          Token::Signed(extra) => (TypeSpecifier::Signed, span_from_extra(extra)),
-          Token::Unsigned(extra) => (TypeSpecifier::Unsigned, span_from_extra(extra)),
-          Token::Bool(extra) => (TypeSpecifier::Bool, span_from_extra(extra)),
-          Token::Complex(extra) => (TypeSpecifier::Complex, span_from_extra(extra)),
-        },
-        // TODO implement later
-        // atomic_type_specifier(),
-        struct_or_union_specifier(),
-        enum_specifier(),
-    ))
+    recursive(|type_spec| {
+        choice((
+            select! {
+              Token::Void(extra) => (TypeSpecifier::Void, span_from_extra(extra)),
+              Token::Char(extra) => (TypeSpecifier::Char, span_from_extra(extra)),
+              Token::Short(extra) => (TypeSpecifier::Short, span_from_extra(extra)),
+              Token::Int(extra) => (TypeSpecifier::Int, span_from_extra(extra)),
+              Token::Long(extra) => (TypeSpecifier::Long, span_from_extra(extra)),
+              Token::Float(extra) => (TypeSpecifier::Float, span_from_extra(extra)),
+              Token::Double(extra) => (TypeSpecifier::Double, span_from_extra(extra)),
+              Token::Signed(extra) => (TypeSpecifier::Signed, span_from_extra(extra)),
+              Token::Unsigned(extra) => (TypeSpecifier::Unsigned, span_from_extra(extra)),
+              Token::Bool(extra) => (TypeSpecifier::Bool, span_from_extra(extra)),
+              Token::Complex(extra) => (TypeSpecifier::Complex, span_from_extra(extra)),
+            },
+            struct_or_union_specifier_inner(type_spec.clone()),
+            enum_specifier(),
+        ))
+    })
 }
 
 fn struct_or_union_specifier<'tokens, 'src: 'tokens, I>()
@@ -875,11 +875,19 @@ fn struct_or_union_specifier<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    // TODO try to understand why boxed is needed here
+    struct_or_union_specifier_inner(type_specifier())
+}
+
+fn struct_or_union_specifier_inner<'tokens, 'src: 'tokens, I>(
+    type_spec: impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token, Span = Span>,
+{
     choice((
         struct_or_union()
             .then_ignore(left_brace())
-            .then(struct_declaration_list())
+            .then(struct_declaration_list_inner(type_spec.clone()))
             .then_ignore(right_brace())
             .map(|((kind, kind_span), struct_declaration_list)| {
                 (
@@ -897,7 +905,7 @@ where
         struct_or_union()
             .then(identifier())
             .then_ignore(left_brace())
-            .then(struct_declaration_list())
+            .then(struct_declaration_list_inner(type_spec.clone()))
             .then_ignore(right_brace())
             .map(|(((kind, kind_span), (identifier, _identifier_span)), struct_declaration_list)| {
                 (
@@ -939,12 +947,13 @@ where
     }
 }
 
-fn struct_declaration_list<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Vec<Spanned<StructDeclaration>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn struct_declaration_list_inner<'tokens, 'src: 'tokens, I>(
+    type_spec: impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Vec<Spanned<StructDeclaration>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    struct_declaration().separated_by(comma()).at_least(1).collect()
+    struct_declaration_inner(type_spec).repeated().at_least(1).collect()
 }
 
 fn struct_declaration<'tokens, 'src: 'tokens, I>()
@@ -952,8 +961,17 @@ fn struct_declaration<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
+    struct_declaration_inner(type_specifier())
+}
+
+fn struct_declaration_inner<'tokens, 'src: 'tokens, I>(
+    type_spec: impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Spanned<StructDeclaration>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token, Span = Span>,
+{
     choice((
-        specifier_qualifier_list().then_ignore(semicolon()).map(|specifiers| {
+        specifier_qualifier_list_inner(type_spec.clone()).then_ignore(semicolon()).map(|specifiers| {
             (
                 StructDeclaration {
                     specifiers: specifiers
@@ -969,7 +987,7 @@ where
                 specifiers.clone()[0].1,
             )
         }),
-        specifier_qualifier_list().then(struct_declarator_list()).then_ignore(semicolon()).map(
+        specifier_qualifier_list_inner(type_spec.clone()).then(struct_declarator_list()).then_ignore(semicolon()).map(
             |(specifiers, declarators)| {
                 (
                     StructDeclaration {
@@ -987,7 +1005,6 @@ where
                 )
             },
         ),
-        // static_assert_declaration(), TODO maybe add this someday
     ))
 }
 
@@ -996,10 +1013,19 @@ fn specifier_qualifier_list<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    type_specifier()
+    specifier_qualifier_list_inner(type_specifier())
+}
+
+fn specifier_qualifier_list_inner<'tokens, 'src: 'tokens, I>(
+    type_spec: impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Vec<Spanned<TypeQualOrSpec>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token, Span = Span>,
+{
+    type_spec
         .map(|(specifier, span)| (TypeQualOrSpec::Specifier(specifier), span))
         .or(type_qualifier().map(|(qualifier, span)| (TypeQualOrSpec::Qualifier(qualifier), span)))
-        .separated_by(comma())
+        .repeated()
         .at_least(1)
         .collect()
 }

@@ -38,6 +38,7 @@
             cargo-watch
             rust-analyzer
             mold
+            lldb
           ];
 
           env = {
