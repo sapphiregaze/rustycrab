@@ -363,9 +363,11 @@ struct Printer : ASTWalker {
   }
 
   void visit(TranslationUnit &tu) override {
-    std::cout << "Visiting TranslationUnit" << std::endl;
-    for(auto &decl : tu.declarations){
-      if(decl) decl->accept(*this);
+    std::cout << "Visiting AST Head" << std::endl;
+    for(const auto& child : tu.children()){
+      if(child){
+        child->accept(*this);
+      }
     }
   }
 

@@ -5,6 +5,8 @@
 #include <ostream>
 #include <vector>
 #include <memory>
+#include <algorithm>
+#include <cassert>
 
 namespace cAST {
 
@@ -124,18 +126,61 @@ struct SourceRange {
 struct ASTWalker;
 
 struct ASTNode {
+  using ChildPtr = std::unique_ptr<ASTNode>;
+  using Children = std::vector<ChildPtr>;
+
   ASTNode* parent = nullptr;
   SourceRange loc{};
-  ~ASTNode() = default;
-  virtual void accept(ASTWalker &v) = 0;
 
-  void set_parent(ASTNode* p) {
-    parent = p;
+  virtual ~ASTNode() = default;
+  virtual void accept(ASTWalker& v) = 0;
+
+  // Add an existing child (takes ownership).
+  ASTNode* add_child(ChildPtr n) {
+    if (!n) return nullptr;
+    n->parent = this;
+    children_.emplace_back(std::move(n));
+    return children_.back().get();
   }
-  ASTNode* get_parent() {
-    return parent;
+
+  // Construct a child in place and add it.
+  template <class T, class... Args>
+  T* emplace_child(Args&&... args) {
+    auto n = std::make_unique<T>(std::forward<Args>(args)...);
+    n->parent = this;
+    T* raw = n.get();
+    children_.emplace_back(std::move(n));
+    return raw;
   }
+
+  // Read-only accessors (enough to iterate/inspect)
+  const Children& children() const noexcept { return children_; }
+  std::size_t size() const noexcept { return children_.size(); }
+  const ASTNode* child(std::size_t i) const noexcept { return children_[i].get(); }
+  ASTNode*       child(std::size_t i)       noexcept { return children_[i].get(); }
+
+  // Optional (if you still want these)
+  void set_parent(ASTNode* p) { parent = p; }
+  ASTNode* get_parent()       { return parent; }
+  const ASTNode* get_parent() const { return parent; }
+
+private:
+  Children children_{};
 };
+
+// struct ASTNode {
+//   ASTNode* parent = nullptr;
+//   SourceRange loc{};
+//   ~ASTNode() = default;
+//   virtual void accept(ASTWalker &v) = 0;
+
+//   void set_parent(ASTNode* p) {
+//     parent = p;
+//   }
+//   ASTNode* get_parent() {
+//     return parent;
+//   }
+// };
 
 // pretty printer
 void prettyprint(ASTNode &n, std::ostream &os);
@@ -230,6 +275,9 @@ struct CharLiteral : Expr {
 
 struct StringLiteral : Expr {
   std::string literal;
+  void set_literal(const std::string& lit) {
+    literal = lit;
+  }
   void accept(ASTWalker &v) override;
 };
 
@@ -458,6 +506,9 @@ struct TypeNode : public ASTNode {
 
 struct BuiltinType : public TypeNode {
   BUILTIN_TYPE type;
+  void set_type(BUILTIN_TYPE t) {
+    type = t;
+  }
   void accept(ASTWalker &v) override;
 };
 

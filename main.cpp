@@ -23,7 +23,7 @@ int main( const int argc, const char **argv ) {
   driver.parse(argv[1]);
 
   if (driver.had_error()) {
-    driver.dump_diagnostics(std::cerr);
+    // driver.dump_diagnostics(std::cerr);
     return 2;
   }
 
