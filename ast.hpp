@@ -494,7 +494,7 @@ struct ASTWalker {
   virtual void visit(MemberExpr&) {}
   virtual void visit(ArraySubscriptExpr&) {}
   virtual void visit(CallExpr&) {}
-  // virtual void visit(CastExpr&) {}
+  virtual void visit(CastExpr&) {}
   virtual void visit(UnaryExpr&) {}
   virtual void visit(BinaryExpr&) {}
   virtual void visit(ConditionalExpr&) {}

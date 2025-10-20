@@ -15,7 +15,7 @@ void IdentifierExpr::accept(ASTWalker &v){ v.visit(*this); }
 void MemberExpr::accept(ASTWalker &v){ v.visit(*this); }
 void ArraySubscriptExpr::accept(ASTWalker &v){ v.visit(*this); }
 void CallExpr::accept(ASTWalker &v){ v.visit(*this); }
-// void CastExpr::accept(ASTWalker &v){ v.visit(*this); }
+void CastExpr::accept(ASTWalker &v){ v.visit(*this); }
 void UnaryExpr::accept(ASTWalker &v){ v.visit(*this); }
 void BinaryExpr::accept(ASTWalker &v){ v.visit(*this); }
 void ConditionalExpr::accept(ASTWalker &v){ v.visit(*this); }
@@ -202,6 +202,13 @@ struct Printer : ASTWalker {
     return "?";
   }
 
+  void visit(CastExpr &e) override {
+    os << "(";
+    if(e.typeOperand) e.typeOperand->accept(*this);
+    os << ") ";
+    if(e.operand) e.operand->accept(*this);
+  }
+
   void visit(BinaryExpr &e) override {
     if(e.left) e.left->accept(*this);
     os << " " << binOpToString(e.op) << " ";
@@ -286,10 +293,6 @@ struct Printer : ASTWalker {
     if(!d.name.empty()) os << " " << d.name;
     if(d.isVariadic) os << " ...";
   }
-
-  // void visit(TypedefDecl &d) override {
-  //   os << "typedef "; if(d.underlying) d.underlying->accept(*this); os << " " << d.name << ";\n";
-  // }
 
   void visit(FieldDecl &d) override {
     if(d.type) d.type->accept(*this);

@@ -90,7 +90,7 @@
 
 %type <cAST::DeclSpecs> declaration_specifiers specifier_qualifier_list
 
-%type <std::unique_ptr<cAST::TypeNode>> type_specifier type_name
+%type <cAST::TypeNode*> type_specifier type_name
 
 %type <std::unique_ptr<cAST::Decl>> declarator direct_declarator pointer
 
@@ -244,17 +244,19 @@ expression
   ;
 
 declaration
-  : declaration_specifiers ';'
-  | declaration_specifiers init_declarator_list ';'
+  : declaration_specifiers ';' {
+    driver.makeStringLiteral("testing testing 123");
+  }
+  /* | declaration_specifiers init_declarator_list ';' */
   ;
 
 declaration_specifiers
   : type_specifier
-  | type_qualifier
+  /* | type_qualifier
   | storage_class_specifier
   | declaration_specifiers type_specifier
   | declaration_specifiers type_qualifier
-  | declaration_specifiers storage_class_specifier
+  | declaration_specifiers storage_class_specifier */
   ;
 
 storage_class_specifier
@@ -405,23 +407,23 @@ jump_statement
 translation_unit
 	: external_declaration {
       std::cout << "Adding external declaration to translation unit." << std::endl;
-      driver.push_declaration(std::move($1));
+      // driver.push_declaration(std::move($1));
     }
 	| translation_unit external_declaration {
       std::cout << "Adding external declaration to translation unit." << std::endl;
-      driver.push_declaration(std::move($2));
+      // driver.push_declaration(std::move($2));
     }
 	;
 
 external_declaration
-  : function_definition {
-      std::cout << "Function definition parsed." << std::endl;
-      $$ = std::move($1);
-    }
-  | declaration {
+  : declaration {
       std::cout << "Declaration parsed." << std::endl;
-      $$ = std::move($1);
+      // $$ = std::move($1);
     }
+  /* | function_definition {
+    std::cout << "Function definition parsed." << std::endl;
+    $$ = std::move($1);
+  } */
   ;
 
 function_definition

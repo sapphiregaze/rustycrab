@@ -1,0 +1,6 @@
+void;
+char;
+int;
+long;
+float;
+double;
