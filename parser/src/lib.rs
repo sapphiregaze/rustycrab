@@ -172,7 +172,7 @@ where
         primary_expression(assign.clone()),
         // compound literals
         left_paren()
-            .ignore_then(type_name())
+            .ignore_then(type_name(assign.clone()))
             .then_ignore(right_paren().then(left_brace()))
             .then(initializer_list(initializer()))
             .then_ignore(comma().or_not())
@@ -318,7 +318,7 @@ where
     recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|cast_expr| {
         choice((
             unary_expression(assign.clone()),
-            left_paren().ignore_then(type_name()).then_ignore(right_paren()).then(cast_expr.clone()).map(
+            left_paren().ignore_then(type_name(assign.clone())).then_ignore(right_paren()).then(cast_expr.clone()).map(
                 |((type_name, type_name_span), (cast_expr, _cast_expr_span))| {
                     (Expr::Cast { type_name: Box::new(type_name), expr: Box::new(cast_expr) }, type_name_span)
                 },
@@ -576,14 +576,13 @@ where
 }
 
 fn constant_expression<'tokens, 'src: 'tokens, I>(
-
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
 )
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    // TODO i think this is the problem? or at least part of it
-    conditional_expression(assignment_expression())
+    conditional_expression(assign.clone())
 }
 
 fn declaration<'tokens, 'src: 'tokens, I>()
@@ -635,7 +634,7 @@ where
     let mapped_type_qualifier =
         type_qualifier().map(|(qualifier, span)| (DeclarationSpecifier::TypeQualifier(qualifier), span));
     let mapped_type_specifier =
-        type_specifier().map(|(specifier, span)| (DeclarationSpecifier::TypeSpecifier(specifier), span));
+        type_specifier(assignment_expression()).map(|(specifier, span)| (DeclarationSpecifier::TypeSpecifier(specifier), span));
     let mapped_function_specifier =
         function_specifier().map(|(specifier, span)| (DeclarationSpecifier::FunctionSpecifier(specifier), span));
 
@@ -681,8 +680,9 @@ where
     }
 }
 
-fn type_specifier<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn type_specifier<'tokens, 'src: 'tokens, I>(
+    assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -703,17 +703,18 @@ where
             },
             // TODO causing recursion issues
             // struct_or_union_specifier_inner(type_spec.clone()),
-            enum_specifier_inner(type_spec.clone()),
+            // enum_specifier_inner(assign.clone(), type_spec.clone()),
         ))
     })
 }
 
-fn struct_or_union_specifier<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn struct_or_union_specifier<'tokens, 'src: 'tokens, I>(
+    assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    struct_or_union_specifier_inner(type_specifier())
+    struct_or_union_specifier_inner(type_specifier(assign.clone()))
 }
 
 fn struct_or_union_specifier_inner<'tokens, 'src: 'tokens, I>(
@@ -785,12 +786,13 @@ where
     }
 }
 
-fn struct_declaration_list<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Vec<Spanned<StructDeclaration>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn struct_declaration_list<'tokens, 'src: 'tokens, I>(
+    assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Vec<Spanned<StructDeclaration>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    struct_declaration_list_inner(type_specifier())
+    struct_declaration_list_inner(type_specifier(assign.clone()))
 }
 
 fn struct_declaration_list_inner<'tokens, 'src: 'tokens, I>(
@@ -802,12 +804,14 @@ where
     struct_declaration_inner(type_spec).repeated().at_least(1).collect()
 }
 
-fn struct_declaration<'tokens, 'src: 'tokens, I>()
+fn struct_declaration<'tokens, 'src: 'tokens, I>(
+    assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+)
 -> impl Parser<'tokens, I, Spanned<StructDeclaration>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    struct_declaration_inner(type_specifier())
+    struct_declaration_inner(type_specifier(assign.clone()))
 }
 
 fn struct_declaration_inner<'tokens, 'src: 'tokens, I>(
@@ -854,12 +858,14 @@ where
     ))
 }
 
-fn specifier_qualifier_list<'tokens, 'src: 'tokens, I>()
+fn specifier_qualifier_list<'tokens, 'src: 'tokens, I>(
+    assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+)
 -> impl Parser<'tokens, I, Vec<Spanned<TypeQualOrSpec>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    specifier_qualifier_list_inner(type_specifier())
+    specifier_qualifier_list_inner(type_specifier(assign.clone()))
 }
 
 fn specifier_qualifier_list_inner<'tokens, 'src: 'tokens, I>(
@@ -910,15 +916,18 @@ where
     //   }),
 }
 
-fn enum_specifier<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn enum_specifier<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+  type_spec: impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    enum_specifier_inner(type_specifier())
+    enum_specifier_inner(assign.clone() ,type_spec.clone())
 }
 
 fn enum_specifier_inner<'tokens, 'src: 'tokens, I>(
+    assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
     type_spec: impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
 ) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -926,7 +935,7 @@ where
 {
     let _ = type_spec;
     choice((
-        enum_token().ignore_then(left_brace()).ignore_then(enumerator_list()).then_ignore(right_brace()).map(
+        enum_token().ignore_then(left_brace()).ignore_then(enumerator_list(assign.clone())).then_ignore(right_brace()).map(
             |enumerators| {
                 (
                     TypeSpecifier::Enum(EnumSpecifier {
@@ -942,7 +951,7 @@ where
         enum_token()
             .ignore_then(identifier())
             .then_ignore(left_brace())
-            .then(enumerator_list())
+            .then(enumerator_list(assign.clone()))
             .then_ignore(right_brace())
             .map(|((identifier, span), enumerators)| {
                 (
@@ -967,21 +976,23 @@ where
     ))
 }
 
-fn enumerator_list<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Vec<Spanned<Enumerator>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn enumerator_list<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Vec<Spanned<Enumerator>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    enumerator().separated_by(comma()).at_least(1).allow_trailing().collect()
+    enumerator(assign.clone()).separated_by(comma()).at_least(1).allow_trailing().collect()
 }
 
-fn enumerator<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Enumerator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn enumerator<'tokens, 'src: 'tokens, I>(
+  assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Enumerator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     choice((
-        enumeration_constant().then_ignore(eq()).then(constant_expression()).map(
+        enumeration_constant().then_ignore(eq()).then(constant_expression(assign.clone())).map(
             |((enum_constant, enum_span), (constant_expr, _constant_span))| {
                 (Enumerator { name: extract_identifier!(enum_constant), value: Some(constant_expr) }, enum_span)
             },
@@ -1336,12 +1347,14 @@ where
     identifier().separated_by(comma()).at_least(1).collect()
 }
 
-fn type_name<'tokens, 'src: 'tokens, I>()
+fn type_name<'tokens, 'src: 'tokens, I>(
+    assign: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+)
 -> impl Parser<'tokens, I, Spanned<TypeName>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    specifier_qualifier_list().then(abstract_declarator().or_not()).map_with(
+    specifier_qualifier_list(assign.clone()).then(abstract_declarator().or_not()).map_with(
         |(specifiers_qualifiers, declarator_option), e| {
             let specifiers = specifiers_qualifiers
                 .clone()
@@ -1548,7 +1561,7 @@ where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     choice((
-        constant_expression()
+        constant_expression(assignment_expression())
             .delimited_by(left_bracket(), right_bracket())
             .map_with(|(expr, _span), e| (Designator::Index(expr), e.span())),
         dot()
@@ -1595,7 +1608,7 @@ where
                 (Stmt::Labeled { label: extract_identifier!(identifier), stmt: Box::new(stmt) }, e.span())
             },
         ),
-        case_token().ignore_then(constant_expression()).then_ignore(colon()).then(statement.clone()).map_with(
+        case_token().ignore_then(constant_expression(assignment_expression())).then_ignore(colon()).then(statement.clone()).map_with(
             |((constant, _constant_span), (stmt, _stmt_span)), e| {
                 (Stmt::Case { expr: constant, stmt: Box::new(stmt) }, e.span())
             },
