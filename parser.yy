@@ -194,67 +194,67 @@ cast_expression
 
 multiplicative_expression
   : cast_expression                              { $$ = std::move($1); }
-  | multiplicative_expression '*' cast_expression{ $$ = driver.makeBinary(AST::BinOp::Mul, std::move($1), std::move($3)); }
-  | multiplicative_expression '/' cast_expression{ $$ = driver.makeBinary(AST::BinOp::Div, std::move($1), std::move($3)); }
-  | multiplicative_expression '%' cast_expression{ $$ = driver.makeBinary(AST::BinOp::Mod, std::move($1), std::move($3)); }
+  | multiplicative_expression '*' cast_expression{ $$ = driver.makeBinary(AST::BINARY_OPERATOR::MULTIPLY, std::move($1), std::move($3)); }
+  | multiplicative_expression '/' cast_expression{ $$ = driver.makeBinary(AST::BINARY_OPERATOR::DIVIDE, std::move($1), std::move($3)); }
+  | multiplicative_expression '%' cast_expression{ $$ = driver.makeBinary(AST::BINARY_OPERATOR::MODULO, std::move($1), std::move($3)); }
   ;
 
 additive_expression
   : multiplicative_expression                    { $$ = std::move($1); }
   | additive_expression '+' multiplicative_expression
-                                                { $$ = driver.makeBinary(AST::BinOp::Add, std::move($1), std::move($3)); }
+                                                { $$ = driver.makeBinary(AST::BINARY_OPERATOR::ADD, std::move($1), std::move($3)); }
   | additive_expression '-' multiplicative_expression
-                                                { $$ = driver.makeBinary(AST::BinOp::Sub, std::move($1), std::move($3)); }
+                                                { $$ = driver.makeBinary(AST::BINARY_OPERATOR::SUBTRACT, std::move($1), std::move($3)); }
   ;
 
 shift_expression
   : additive_expression                          { $$ = std::move($1); }
-  | shift_expression LEFT_OP additive_expression { $$ = driver.makeBinary(AST::BinOp::Shl, std::move($1), std::move($3)); }
-  | shift_expression RIGHT_OP additive_expression{ $$ = driver.makeBinary(AST::BinOp::Shr, std::move($1), std::move($3)); }
+  | shift_expression LEFT_OP additive_expression { $$ = driver.makeBinary(AST::BINARY_OPERATOR::LEFT_SHIFT, std::move($1), std::move($3)); }
+  | shift_expression RIGHT_OP additive_expression{ $$ = driver.makeBinary(AST::BINARY_OPERATOR::RIGHT_SHIFT, std::move($1), std::move($3)); }
   ;
 
 relational_expression
   : shift_expression                             { $$ = std::move($1); }
-  | relational_expression '<' shift_expression   { $$ = driver.makeBinary(AST::BinOp::Lt, std::move($1), std::move($3)); }
-  | relational_expression '>' shift_expression   { $$ = driver.makeBinary(AST::BinOp::Gt, std::move($1), std::move($3)); }
-  | relational_expression LE_OP shift_expression { $$ = driver.makeBinary(AST::BinOp::Le, std::move($1), std::move($3)); }
-  | relational_expression GE_OP shift_expression { $$ = driver.makeBinary(AST::BinOp::Ge, std::move($1), std::move($3)); }
+  | relational_expression '<' shift_expression   { $$ = driver.makeBinary(AST::BINARY_OPERATOR::LESS_THAN, std::move($1), std::move($3)); }
+  | relational_expression '>' shift_expression   { $$ = driver.makeBinary(AST::BINARY_OPERATOR::GREATER_THAN, std::move($1), std::move($3)); }
+  | relational_expression LE_OP shift_expression { $$ = driver.makeBinary(AST::BINARY_OPERATOR::LESS_EQUAL, std::move($1), std::move($3)); }
+  | relational_expression GE_OP shift_expression { $$ = driver.makeBinary(AST::BINARY_OPERATOR::GREATER_EQUAL, std::move($1), std::move($3)); }
   ;
 
 equality_expression
   : relational_expression                        { $$ = std::move($1); }
   | equality_expression EQ_OP relational_expression
-                                                { $$ = driver.makeBinary(AST::BinOp::Eq, std::move($1), std::move($3)); }
+                                                { $$ = driver.makeBinary(AST::BINARY_OPERATOR::EQUAL, std::move($1), std::move($3)); }
   | equality_expression NE_OP relational_expression
-                                                { $$ = driver.makeBinary(AST::BinOp::Ne, std::move($1), std::move($3)); }
+                                                { $$ = driver.makeBinary(AST::BINARY_OPERATOR::NOT_EQUAL, std::move($1), std::move($3)); }
   ;
 
 and_expression
   : equality_expression                          { $$ = std::move($1); }
-  | and_expression '&' equality_expression       { $$ = driver.makeBinary(AST::BinOp::BitAnd, std::move($1), std::move($3)); }
+  | and_expression '&' equality_expression       { $$ = driver.makeBinary(AST::BINARY_OPERATOR::BITWISE_AND, std::move($1), std::move($3)); }
   ;
 
 exclusive_or_expression
   : and_expression                               { $$ = std::move($1); }
-  | exclusive_or_expression '^' and_expression   { $$ = driver.makeBinary(AST::BinOp::BitXor, std::move($1), std::move($3)); }
+  | exclusive_or_expression '^' and_expression   { $$ = driver.makeBinary(AST::BINARY_OPERATOR::BITWISE_XOR, std::move($1), std::move($3)); }
   ;
 
 inclusive_or_expression
   : exclusive_or_expression                      { $$ = std::move($1); }
   | inclusive_or_expression '|' exclusive_or_expression
-                                                { $$ = driver.makeBinary(AST::BinOp::BitOr, std::move($1), std::move($3)); }
+                                                { $$ = driver.makeBinary(AST::BINARY_OPERATOR::BITWISE_OR, std::move($1), std::move($3)); }
   ;
 
 logical_and_expression
   : inclusive_or_expression                      { $$ = std::move($1); }
   | logical_and_expression AND_OP inclusive_or_expression
-                                                { $$ = driver.makeBinary(AST::BinOp::LogAnd, std::move($1), std::move($3)); }
+                                                { $$ = driver.makeBinary(AST::BINARY_OPERATOR::LOGICAL_AND, std::move($1), std::move($3)); }
   ;
 
 logical_or_expression
   : logical_and_expression                       { $$ = std::move($1); }
   | logical_or_expression OR_OP logical_and_expression
-                                                { $$ = driver.makeBinary(AST::BinOp::LogOr, std::move($1), std::move($3)); }
+                                                { $$ = driver.makeBinary(AST::BINARY_OPERATOR::LOGICAL_OR, std::move($1), std::move($3)); }
   ;
 
 conditional_expression
@@ -285,7 +285,7 @@ assignment_expression
 
 expression
   : assignment_expression                         { $$ = std::move($1); }
-  | expression ',' assignment_expression          { $$ = driver.makeBinary(AST::BinOp::Comma, std::move($1), std::move($3)); }
+  | expression ',' assignment_expression          { $$ = driver.makeBinary(AST::BINARY_OPERATOR::COMMA, std::move($1), std::move($3)); }
   ;
 
 constant_expression
@@ -478,8 +478,8 @@ function_specifier
 	; */
 
 declarator
-  : pointer direct_declarator           { $$ = driver.wrapPointer($2); /* wrap chain already in $1 or combine both; adjust */ }
-  | direct_declarator                   { $$ = std::move($1); }
+  : pointer direct_declarator { $$ = driver.wrapPointer($2); /* wrap chain already in $1 or combine both; adjust */ }
+  | direct_declarator { $$ = std::move($1); }
   ;
 
 direct_declarator
@@ -504,30 +504,26 @@ direct_declarator
 pointer
 // fold quals into inner then wrap
   /* : '*' type_qualifier_list pointer     { $$ = $3; $$ = driver.wrapPointer($$, @1); } */
-  | '*' type_qualifier_list             { $$ = driver.wrapPointer(AST::Declarator{}); }
-  | '*' pointer                         { $$ = driver.wrapPointer($2); }
-  | '*'                                 { $$ = driver.wrapPointer(AST::Declarator{}); }
+  | '*' type_qualifier_list { $$ = driver.wrapPointer(AST::Declarator{}); }
+  | '*' pointer { $$ = driver.wrapPointer($2); }
+  | '*' { $$ = driver.wrapPointer(AST::Declarator{}); }
   ;
 
 parameter_type_list
 /* mark variadic true in wrapFunction site */
   /* : parameter_list ',' ELLIPSIS         { $$ = std::move($1);  } */
-  | parameter_list                      { $$ = std::move($1); }
+  | parameter_list { $$ = std::move($1); }
   ;
 
 parameter_list
-  : parameter_declaration               { $$ = std::vector{ std::move($1) }; }
-  | parameter_list ',' parameter_declaration
-                                        { $1.emplace_back(std::move($3)); $$ = std::move($1); }
+  : parameter_declaration { $$ = std::vector{ std::move($1) }; }
+  | parameter_list ',' parameter_declaration { $1.emplace_back(std::move($3)); $$ = std::move($1); }
   ;
 
 parameter_declaration
-  : declaration_specifiers declarator
-      { $$ = driver.makeParam($1, $2); }
-  | declaration_specifiers abstract_declarator
-      { $$ = driver.makeParam($1, $2); }
-  | declaration_specifiers
-      { $$ = driver.makeParam($1, AST::Declarator{}); }
+  : declaration_specifiers declarator { $$ = driver.makeParam($1, $2); }
+  | declaration_specifiers abstract_declarator { $$ = driver.makeParam($1, $2); }
+  | declaration_specifiers { $$ = driver.makeParam($1, AST::Declarator{}); }
   ;
 
 type_name : specifier_qualifier_list { $$ = std::move($1.type); }
@@ -597,8 +593,8 @@ designator_list
   ;
 
 designator
-  : '[' constant_expression ']'        { /* record array designator */ }
-  | '.' IDENTIFIER                     { /* record field designator */ }
+  : '[' constant_expression ']' { /* record array designator */ }
+  | '.' IDENTIFIER { /* record field designator */ }
   ;
 
 static_assert_declaration
@@ -606,12 +602,12 @@ static_assert_declaration
 	;
 
 statement
-  : labeled_statement               { $$ = std::move($1); }
-  | compound_statement              { $$ = std::move($1); }
-  | expression_statement            { $$ = std::move($1); }
-  | selection_statement             { $$ = std::move($1); }
-  | iteration_statement             { $$ = std::move($1); }
-  | jump_statement                  { $$ = std::move($1); }
+  : labeled_statement { $$ = std::move($1); }
+  | compound_statement { $$ = std::move($1); }
+  | expression_statement { $$ = std::move($1); }
+  | selection_statement { $$ = std::move($1); }
+  | iteration_statement { $$ = std::move($1); }
+  | jump_statement { $$ = std::move($1); }
   ;
 
 labeled_statement
@@ -675,16 +671,20 @@ jump_statement
 
 translation_unit
 	: external_declaration {
-        driver.head_->declarations.push_back($1);
-      }
+      std::cout << "Adding external declaration to translation unit." << std::endl;
+      driver.push_declaration(std::move($2));
+      // driver.head_->declarations.push_back($1);
+    }
 	| translation_unit external_declaration {
-        driver.head_->declarations.push_back($2);
-      }
+      std::cout << "Adding external declaration to translation unit." << std::endl;
+      driver.push_declaration(std::move($2));
+      // driver.head_->declarations.push_back($2);
+    }
 	;
 
 external_declaration
-  : function_definition        { $$ = std::move($1); }
-  | declaration                { $$ = std::move($1); }  /* declaration also returns unique_ptr<AST::Decl> */
+  : function_definition { $$ = std::move($1); }
+  | declaration { $$ = std::move($1); }
   ;
 
 function_definition

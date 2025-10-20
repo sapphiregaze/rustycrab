@@ -162,6 +162,17 @@ AST::TypeNode* cAST::Driver::push_type(std::unique_ptr<TypeNode> node) {
   throw std::logic_error("no valid type slot at head()");
 }
 
+AST::Expr* cAST::Driver::makeBinary(AST::BINARY_OPERATOR op, std::unique_ptr<AST::Expr> left, std::unique_ptr<AST::Expr> right) {
+  auto node = std::make_unique<AST::BinaryExpr>(op);
+  node->set_parent(head());
+  AST::Expr* raw = node.get();
+  node->left = std::move(left);
+  if (node->left) node->left->set_parent(raw);
+  node->right = std::move(right);
+  if (node->right) node->right->set_parent(raw);
+  return raw;
+}
+
 // void cAST::Driver::report_error(const std::string& message) {
 //   had_error_ = true;
 //   diags_.push_back(Diag{ -1, -1, message });
