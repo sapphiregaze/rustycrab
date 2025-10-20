@@ -5,6 +5,7 @@
 
 /* Implementation of yyFlexScanner */
 #include "scanner.hpp"
+#include "ast.hpp"
 #undef  YY_DECL
 #define YY_DECL int cAST::cASTScanner::yylex( cAST::cASTParser::semantic_type * const lval, cAST::cASTParser::location_type *loc )
 

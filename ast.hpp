@@ -6,7 +6,7 @@
 #include <vector>
 #include <memory>
 
-namespace AST {
+namespace cAST {
 
 enum class AssignOp {
   Assign,
@@ -129,8 +129,12 @@ struct ASTNode {
   ~ASTNode() = default;
   virtual void accept(ASTWalker &v) = 0;
 
-  void set_parent(ASTNode* p) { parent = p; }
-  ASTNode* get_parent() const { return parent; }
+  void set_parent(ASTNode* p) {
+    parent = p;
+  }
+  ASTNode* get_parent() {
+    return parent;
+  }
 };
 
 // pretty printer
@@ -155,9 +159,9 @@ void prettyprint(ASTNode &n, std::ostream &os);
 // struct ArraySubscriptExpr;
 // struct CallExpr;
 // struct CastExpr;
-// struct UnaryExpression;
-// struct BinaryExpression;
-// struct ConditionalOp;
+// struct UnaryExpr;
+// struct BinaryExpr;
+// struct ConditionalExpr;
 // struct InitListExpr;
 // struct CompoundLiteralExpr;
 
@@ -193,6 +197,12 @@ struct Stmt;
 struct Decl;
 struct TypeNode;
 
+struct DeclSpecs {
+  std::vector<TYPE_STORAGE_QUALIFIER> storage;
+  std::vector<TYPE_QUALIFIER> qualifiers;
+  std::unique_ptr<TypeNode> type;
+};
+
 // expressions
 struct Expr : public ASTNode {
   virtual ~Expr() = default;
@@ -226,19 +236,64 @@ struct StringLiteral : Expr {
   void accept(ASTWalker &v) override;
 };
 
-// binary expressions
-struct BinaryExpression : public Expr {
+struct BinaryExpr : public Expr {
   BINARY_OPERATOR op;
-  Expr* left;
-  Expr* right;
+  std::unique_ptr<Expr> left;
+  std::unique_ptr<Expr> right;
+  void set_left(std::unique_ptr<Expr> l) {
+    left = std::move(l);
+  }
+  void set_right(std::unique_ptr<Expr> r) {
+    right = std::move(r);
+  }
+  void set_op(BINARY_OPERATOR o) {
+    op = o;
+  }
   void accept(ASTWalker &v) override;
 };
 
-// unary expressions
-struct UnaryExpression : public Expr {
+struct UnaryExpr : public Expr {
   UNARY_OPERATOR op;
-  Expr* operand;
-  TypeNode* typeOperand; // for sizeof, alignof
+  std::unique_ptr<Expr> operand;
+  std::unique_ptr<TypeNode> typeOperand;
+  void set_operand(std::unique_ptr<Expr> opd) {
+    operand = std::move(opd);
+  }
+  void set_typeOperand(std::unique_ptr<TypeNode> t) {
+    typeOperand = std::move(t);
+  }
+  void set_op(UNARY_OPERATOR o) {
+    op = o;
+  }
+
+  void accept(ASTWalker &v) override;
+};
+
+struct CastExpr : public Expr {
+  std::unique_ptr<TypeNode> typeOperand;
+  std::unique_ptr<Expr> operand;
+  void set_typeOperand(std::unique_ptr<TypeNode> t) {
+    typeOperand = std::move(t);
+  }
+  void set_operand(std::unique_ptr<Expr> opd) {
+    operand = std::move(opd);
+  }
+  void accept(ASTWalker &v) override;
+};
+
+struct ConditionalExpr : public Expr {
+  std::unique_ptr<Expr> cond;
+  std::unique_ptr<Expr> thenExpr;
+  std::unique_ptr<Expr> elseExpr;
+  void set_cond(std::unique_ptr<Expr> cond) {
+    cond = std::move(cond);
+  }
+  void set_thenExpr(std::unique_ptr<Expr> thenE) {
+    thenExpr = std::move(thenE);
+  }
+  void set_elseExpr(std::unique_ptr<Expr> elseE) {
+    elseExpr = std::move(elseE);
+  }
   void accept(ASTWalker &v) override;
 };
 
@@ -252,7 +307,7 @@ struct NullStmt : public Stmt {
 };
 
 struct ExprStmt : public Stmt {
-  Expr* expr;
+  std::unique_ptr<Expr> expr;
   void accept(ASTWalker &v) override;
 };
 
@@ -265,34 +320,39 @@ struct CompoundStmt : public Stmt {
 };
 
 struct WhileStmt : public Stmt {
-  Expr* condition;
-  Stmt* body;
+  std::unique_ptr<Expr> condition;
+  std::unique_ptr<Stmt> body;
   void accept(ASTWalker &v) override;
 };
 
 struct DoWhileStmt : public Stmt {
-  Stmt* body;
-  Expr* condition;
+  std::unique_ptr<Stmt> body;
+  std::unique_ptr<Expr> condition;
   void accept(ASTWalker &v) override;
 };
 
 struct ForStmt : public Stmt {
-  Stmt* init;
-  Expr* condition;
-  Expr* increment;
-  Stmt* body;
+  std::unique_ptr<Stmt> init;
+  std::unique_ptr<Expr> cond;
+  std::unique_ptr<Expr> incr;
+  std::unique_ptr<Stmt> body;
   void accept(ASTWalker &v) override;
 };
 struct IfStmt : public Stmt {
-  Expr* condition;
+  std::unique_ptr<Expr> cond;
   Stmt* thenBranch;
   Stmt* elseBranch;
   void accept(ASTWalker &v) override;
 };
 
 struct SwitchStmt : public Stmt {
-  Expr* condition;
-  Stmt* body;
+  std::unique_ptr<Expr> cond;
+  std::unique_ptr<Stmt> body;
+  void accept(ASTWalker &v) override;
+};
+
+struct ReturnStmt : public Stmt {
+  std::unique_ptr<Expr> value;
   void accept(ASTWalker &v) override;
 };
 
@@ -308,15 +368,15 @@ struct VarSpecifiers {
 };
 struct VarDecl : public Decl {
   std::string name;
-  TypeNode* type;
-  Expr* init;
+  std::unique_ptr<TypeNode> type;
+  std::unique_ptr<Expr> init;
   VarSpecifiers specs;
   void accept(ASTWalker &v) override;
 };
 
 struct ParamDecl : public Decl {
   std::string name;
-  TypeNode* type;
+  std::unique_ptr<TypeNode> type;
   // indefinite arity;; idk if we implement tthat
   bool isVariadic{false};
   void accept(ASTWalker &v) override;
@@ -324,8 +384,8 @@ struct ParamDecl : public Decl {
 
 struct FieldDecl : public Decl {
   std::string name;
-  TypeNode* type;
-  Expr* bitWidth;
+  std::unique_ptr<TypeNode> type;
+  std::unique_ptr<Expr> bitWidth;
   void accept(ASTWalker &v) override;
 };
 
@@ -345,13 +405,15 @@ struct FieldDecl : public Decl {
 
 struct FunctionDecl : public Decl {
   std::string name;
-  TypeNode* returnType;
+  std::unique_ptr<TypeNode> return_type;
   std::vector<std::unique_ptr<ParamDecl>> params;
   bool isDefinition{false};
   // indefinite arity;; idk if we implement tthat
   bool isVariadic{false};
-  Stmt* body;
-  void set_body(Stmt* b) { body = b; }
+  std::unique_ptr<Stmt> body;
+  void set_body(std::unique_ptr<Stmt> b) {
+    body = std::move(b);
+  }
   void set_params(std::vector<std::unique_ptr<ParamDecl>> p) {
     params = std::move(p);
   }
@@ -359,7 +421,7 @@ struct FunctionDecl : public Decl {
 };
 
 struct DeclStmt : public Stmt {
-  Decl* declaration;
+  std::unique_ptr<Decl> declaration;
   void accept(ASTWalker &v) override;
 };
 
@@ -386,17 +448,17 @@ struct BuiltinType : public TypeNode {
 };
 
 struct PointerType : public TypeNode {
-  TypeNode* baseType;
+  std::unique_ptr<TypeNode> baseType;
   void accept(ASTWalker &v) override;
 };
 
 struct ArrayType : public TypeNode {
-  TypeNode* elementType;
+  std::unique_ptr<TypeNode> elementType;
   void accept(ASTWalker &v) override;
 };
 
 struct FunctionType : public TypeNode {
-  TypeNode* returnType;
+  std::unique_ptr<TypeNode> returnType;
   void accept(ASTWalker &v) override;
 };
 
@@ -438,9 +500,9 @@ struct ASTWalker {
   // virtual void visit(ArraySubscriptExpr&) {}
   // virtual void visit(CallExpr&) {}
   // virtual void visit(CastExpr&) {}
-  virtual void visit(UnaryExpression&) {}
-  virtual void visit(BinaryExpression&) {}
-  // virtual void visit(ConditionalOp&) {}
+  virtual void visit(UnaryExpr&) {}
+  virtual void visit(BinaryExpr&) {}
+  virtual void visit(ConditionalExpr&) {}
   // virtual void visit(InitListExpr&) {}
   // virtual void visit(CompoundLiteralExpr&) {}
 
@@ -459,7 +521,7 @@ struct ASTWalker {
   // virtual void visit(BreakStmt&) {}
   // virtual void visit(ContinueStmt&) {}
   // virtual void visit(GotoStmt&) {}
-  // virtual void visit(ReturnStmt&) {}
+  virtual void visit(ReturnStmt&) {}
 
   // Decl
   virtual void visit(VarDecl&) {}
@@ -473,4 +535,4 @@ struct ASTWalker {
   virtual void visit(TranslationUnit&) {}
 };
 
-} // namespace AST
+} // namespace cAST

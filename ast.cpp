@@ -1,5 +1,5 @@
 #include "ast.hpp"
-using namespace AST;
+using namespace cAST;
 
 void BuiltinType::accept(ASTWalker &v){ v.visit(*this); }
 void PointerType::accept(ASTWalker &v){ v.visit(*this); }
@@ -19,9 +19,9 @@ void IdentifierExpr::accept(ASTWalker &v){ v.visit(*this); }
 // void ArraySubscriptExpr::accept(ASTWalker &v){ v.visit(*this); }
 // void CallExpr::accept(ASTWalker &v){ v.visit(*this); }
 // void CastExpr::accept(ASTWalker &v){ v.visit(*this); }
-void UnaryExpression::accept(ASTWalker &v){ v.visit(*this); }
-void BinaryExpression::accept(ASTWalker &v){ v.visit(*this); }
-// void ConditionalOp::accept(ASTWalker &v){ v.visit(*this); }
+void UnaryExpr::accept(ASTWalker &v){ v.visit(*this); }
+void BinaryExpr::accept(ASTWalker &v){ v.visit(*this); }
+void ConditionalExpr::accept(ASTWalker &v){ v.visit(*this); }
 // void InitListExpr::accept(ASTWalker &v){ v.visit(*this); }
 // void CompoundLiteralExpr::accept(ASTWalker &v){ v.visit(*this); }
 
@@ -41,7 +41,7 @@ void SwitchStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void BreakStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void ContinueStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void GotoStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void ReturnStmt::accept(ASTWalker &v){ v.visit(*this); }
+void ReturnStmt::accept(ASTWalker &v){ v.visit(*this); }
 
 
 // Decl
@@ -177,7 +177,7 @@ struct Printer : ASTWalker {
   void visit(StringLiteral &e) override { os << '"' << e.literal << '"'; }
   void visit(IdentifierExpr &e) override { os << e.literal; }
 
-  void visit(UnaryExpression &e) override {
+  void visit(UnaryExpr &e) override {
     switch(e.op){
       case UNARY_OPERATOR::INCREMENT: if(e.operand){ e.operand->accept(*this); os << "++";} break;
       case UNARY_OPERATOR::DECREMENT: if(e.operand){ e.operand->accept(*this); os << "--";} break;
@@ -238,7 +238,7 @@ struct Printer : ASTWalker {
     return "?";
   }
 
-  void visit(BinaryExpression &e) override {
+  void visit(BinaryExpr &e) override {
     if(e.left) e.left->accept(*this);
     os << " " << binOpToString(e.op) << " ";
     if(e.right) e.right->accept(*this);
@@ -261,7 +261,7 @@ struct Printer : ASTWalker {
 
   void visit(IfStmt &s) override {
     os << "if (";
-    if(s.condition) s.condition->accept(*this);
+    if(s.cond) s.cond->accept(*this);
     os << ") ";
     if(s.thenBranch) {
       s.thenBranch->accept(*this);
@@ -276,7 +276,7 @@ struct Printer : ASTWalker {
 
   void visit(SwitchStmt &s) override {
     os << "switch (";
-    if(s.condition) s.condition->accept(*this);
+    if(s.cond) s.cond->accept(*this);
     os << ") ";
     if(s.body) {
       s.body->accept(*this);
@@ -321,7 +321,7 @@ struct Printer : ASTWalker {
   }
 
   void visit(FunctionDecl &d) override {
-    if(d.returnType) d.returnType->accept(*this);
+    if(d.return_type) d.return_type->accept(*this);
     os << " " << d.name << "(";
 
     for(size_t i = 0; i < d.params.size(); ++i){
@@ -361,6 +361,23 @@ struct Printer : ASTWalker {
     if(s.declaration) s.declaration->accept(*this);
   }
 
+  void visit(ConditionalExpr &e) override {
+    if(e.cond) e.cond->accept(*this);
+    os << " ? ";
+    if(e.thenExpr) e.thenExpr->accept(*this);
+    os << " : ";
+    if(e.elseExpr) e.elseExpr->accept(*this);
+  }
+
+  void visit(ReturnStmt &s) override {
+    os << "return";
+    if(s.value){
+      os << " ";
+      s.value->accept(*this);
+    }
+    os << ";\n";
+  }
+
   void visit(TranslationUnit &tu) override {
     std::cout << "Visiting TranslationUnit" << std::endl;
     for(auto &decl : tu.declarations){
@@ -370,7 +387,7 @@ struct Printer : ASTWalker {
 
 };
 
-void AST::prettyprint(ASTNode &n, std::ostream &os){
+void cAST::prettyprint(cAST::ASTNode &n, std::ostream &os){
   Printer p{os};
   n.accept(p);
 }

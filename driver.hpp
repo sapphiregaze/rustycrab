@@ -17,11 +17,11 @@ public:
   virtual ~Driver();
 
   // scope management (call from grammar actions)
-  void enter(AST::ASTNode* n) { parent_stack_.push_back(n); }
+  void enter(cAST::ASTNode* n) { parent_stack_.push_back(n); }
   void leave()                { parent_stack_.pop_back();  }
 
   // current container node
-  AST::ASTNode* head() const {
+  cAST::ASTNode* head() const {
     return parent_stack_.empty() ? nullptr : parent_stack_.back();
   }
 
@@ -32,21 +32,34 @@ public:
   void reset();
 
   // Access or take the built AST
-  const AST::TranslationUnit* root() const { return head_.get(); }
-  std::unique_ptr<AST::TranslationUnit> take();
+  const cAST::TranslationUnit* root() const { return head_.get(); }
+  std::unique_ptr<cAST::TranslationUnit> take();
 
   void ensure_root();
-  AST::Decl* cAST::Driver::push_declaration(std::unique_ptr<AST::Decl> node);
-  AST::Stmt* cAST::Driver::push_statement(std::unique_ptr<AST::Stmt> node);
-  AST::Expr* cAST::Driver::push_expression(std::unique_ptr<AST::Expr> node);
-  AST::TypeNode* cAST::Driver::push_type(std::unique_ptr<AST::TypeNode> node);
+  cAST::Decl* push_declaration(std::unique_ptr<cAST::Decl> node);
+  cAST::Stmt* push_statement(std::unique_ptr<cAST::Stmt> node);
+  cAST::Expr* push_expression(std::unique_ptr<cAST::Expr> node);
+  cAST::TypeNode* push_type(std::unique_ptr<cAST::TypeNode> node);
+  cAST::TypeNode* makeBuiltinType(cAST::BUILTIN_TYPE bt);
+  cAST::Expr* makeBinary(cAST::BINARY_OPERATOR op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right);
+  cAST::Expr* makeUnary(cAST::UNARY_OPERATOR op, std::unique_ptr<cAST::Expr> expr);
+  cAST::Expr* makeIdentifierExpr(const std::string& name);
+  cAST::Expr* singleton(std::unique_ptr<cAST::Expr> expr);
+  cAST::Expr* makeCast(std::unique_ptr<cAST::TypeNode> type, std::unique_ptr<cAST::Expr> expr);
+  cAST::Expr* makeCond(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Expr> thenExpr, std::unique_ptr<cAST::Expr> elseExpr);
+  cAST::Expr* makeConstantIntExpr(int value);
+  cAST::Expr* makeConstantFloatExpr(float value);
+  cAST::Expr* makeStringLiteral(const std::string& value);
+
+  cAST::DeclSpecs makeSpecsFromType(std::unique_ptr<cAST::TypeNode> type);
+  cAST::DeclSpecs combineSpecs(cAST::DeclSpecs a, cAST::DeclSpecs b);
 
   // root
-  void set_translation_unit(std::unique_ptr<AST::TranslationUnit> tu) {
+  void set_translation_unit(std::unique_ptr<cAST::TranslationUnit> tu) {
     head_ = std::move(tu);
     enter(head_.get());
   }
-  AST::TranslationUnit* tu() const { return head_.get(); }
+  cAST::TranslationUnit* tu() const { return head_.get(); }
 
   // Optional helpers for common constructs
   // void set_source_name(std::string name) { source_name_ = std::move(name); }
@@ -68,8 +81,8 @@ private:
   cAST::cASTParser *parser = nullptr;
   cAST::cASTScanner *scanner = nullptr;
 
-  std::unique_ptr<AST::TranslationUnit> head_;
-  std::vector<AST::ASTNode*> parent_stack_;
+  std::unique_ptr<cAST::TranslationUnit> head_;
+  std::vector<cAST::ASTNode*> parent_stack_;
   std::string source_name_;
   bool had_error_ = false;
 
