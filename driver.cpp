@@ -74,8 +74,6 @@ void cAST::Driver::ensure_root() {
 }
 
 cAST::TypeNode* cAST::Driver::makeBuiltinType(cAST::BUILTIN_TYPE bt) {
-  std::cout << "Making builtin type " << static_cast<int>(bt) << "\n";
-
   cAST::ASTNode* parent = head();
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for builtin type");
@@ -114,8 +112,6 @@ cAST::TypeNode* cAST::Driver::makeBuiltinType(cAST::BUILTIN_TYPE bt) {
 // }
 
 cAST::Expr* cAST::Driver::makeStringLiteral(const std::string& value) {
-  std::cout << "Making string literal expr with value " << value << "\n";
-
   cAST::ASTNode* parent = head();
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for string literal");
@@ -131,7 +127,6 @@ cAST::Expr* cAST::Driver::makeStringLiteral(const std::string& value) {
 // }
 
 cAST::Expr* cAST::Driver::makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer) {
-  std::cout << "Making member access expr for member " << memberName << (isPointer ? " via pointer\n" : "\n");
   auto node = std::make_unique<cAST::MemberExpr>();
   node->set_parent(head());
   cAST::Expr* raw = node.get();
@@ -143,7 +138,6 @@ cAST::Expr* cAST::Driver::makeMember(std::unique_ptr<cAST::Expr> base, const std
 }
 
 cAST::Expr* cAST::Driver::makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index) {
-  std::cout << "Making array subscript expr\n";
   auto node = std::make_unique<cAST::ArraySubscriptExpr>();
   node->set_parent(head());
   cAST::Expr* raw = node.get();
@@ -155,7 +149,6 @@ cAST::Expr* cAST::Driver::makeSubscript(std::unique_ptr<cAST::Expr> base, std::u
 }
 
 cAST::Expr* cAST::Driver::makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args) {
-  std::cout << "Making function call expr\n";
   auto node = std::make_unique<cAST::CallExpr>();
   node->set_parent(head());
   cAST::Expr* raw = node.get();
@@ -186,6 +179,5 @@ void cAST::Driver::dump_ast(std::ostream& os) {
   if (!head_) {
     os << "<no AST>\n"; return;
   }
-  os << "AST Dump:\n";
   cAST::prettyprint(*head_, os);
 }

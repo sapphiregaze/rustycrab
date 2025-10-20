@@ -421,12 +421,6 @@ struct IfStmt : public Stmt {
   void accept(ASTWalker &v) override;
 };
 
-struct SwitchStmt : public Stmt {
-  std::unique_ptr<Expr> cond;
-  std::unique_ptr<Stmt> body;
-  void accept(ASTWalker &v) override;
-};
-
 struct ReturnStmt : public Stmt {
   std::unique_ptr<Expr> value;
   void accept(ASTWalker &v) override;
@@ -560,7 +554,6 @@ struct ASTWalker {
   virtual void visit(WhileStmt&) {}
   virtual void visit(DoWhileStmt&) {}
   virtual void visit(ForStmt&) {}
-  virtual void visit(SwitchStmt&) {}
   // virtual void visit(CaseStmt&) {}
   // virtual void visit(DefaultStmt&) {}
   // virtual void visit(LabelStmt&) {}

@@ -406,18 +406,15 @@ jump_statement
 
 translation_unit
 	: external_declaration {
-      std::cout << "Adding external declaration to translation unit." << std::endl;
       // driver.push_declaration(std::move($1));
     }
 	| translation_unit external_declaration {
-      std::cout << "Adding external declaration to translation unit." << std::endl;
       // driver.push_declaration(std::move($2));
     }
 	;
 
 external_declaration
   : declaration {
-      std::cout << "Declaration parsed." << std::endl;
       // $$ = std::move($1);
     }
   /* | function_definition {

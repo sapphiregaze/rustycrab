@@ -31,7 +31,6 @@ void IfStmt::accept(ASTWalker &v){ v.visit(*this); }
 void WhileStmt::accept(ASTWalker &v){ v.visit(*this); }
 void DoWhileStmt::accept(ASTWalker &v){ v.visit(*this); }
 void ForStmt::accept(ASTWalker &v){ v.visit(*this); }
-void SwitchStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void BreakStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void ContinueStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void GotoStmt::accept(ASTWalker &v){ v.visit(*this); }
@@ -73,8 +72,23 @@ static const char* builtinToString(BUILTIN_TYPE b){
 
 struct Printer : ASTWalker {
   std::ostream &os;
+  int indentLevel = 0;
 
   explicit Printer(std::ostream &output) : os(output) {}
+
+  void setIndentLevel(int level) {
+    indentLevel = level;
+  }
+
+  void resetIndentLevel() {
+    indentLevel = 0;
+  }
+
+  void indent() {
+    for(int i=0;i<indentLevel;++i){
+      os << " ";
+    }
+  }
 
   void printQual(std::vector<TYPE_QUALIFIER> q){
     for(auto qual : q){
@@ -99,70 +113,6 @@ struct Printer : ASTWalker {
         case TYPE_STORAGE_QUALIFIER::Thread_Local: os << "_Thread_local "; break;
         case TYPE_STORAGE_QUALIFIER::None: break;
       }
-    }
-  }
-
-  void visit(BuiltinType &t) override {
-    printQual(t.qualifiers);
-    os << builtinToString(t.type);
-  }
-
-  // void visit(PointerType &t) override {
-  //   printQual(t.qualifiers);
-  //   if(t.pointee) t.pointee->accept(*this);
-  //   os << " *";
-  // }
-
-  // void visit(ArrayType &t) override {
-  //   if(t.element) t.element->accept(*this);
-  //   os << "[";
-  //   if(t.isVLA) os << "*";
-  //   else if(t.sizeExpr && *t.sizeExpr){ (*t.sizeExpr)->get()->accept(*this); }
-  //   os << "]";
-  // }
-
-  // void visit(FunctionType &t) override {
-  //   if(t.returnType) t.returnType->accept(*this);
-  //   os << " (";
-  //   for(size_t i=0;i<t.params.size();++i){
-  //     if(i) os << ", ";
-  //     auto &p = *t.params[i];
-  //     if(p.type) p.type->accept(*this);
-  //     if(!p.name.empty()) os << " " << p.name;
-  //   }
-  //   if(t.isVarArg){ if(!t.params.empty()) os << ", "; os << "..."; }
-  //   os << ")";
-  // }
-
-  //=== Expr ===
-  void visit(IntegerLiteral &e) override { os << e.literal; }
-  void visit(FloatingLiteral &e) override { os << e.literal; }
-  void visit(CharLiteral &e) override { os << e.literal; }
-  void visit(StringLiteral &e) override { os << '"' << e.literal << '"'; }
-  void visit(IdentifierExpr &e) override { os << e.literal; }
-
-  void visit(UnaryExpr &e) override {
-    switch(e.op){
-      case UNARY_OPERATOR::INCREMENT: if(e.operand){ e.operand->accept(*this); os << "++";} break;
-      case UNARY_OPERATOR::DECREMENT: if(e.operand){ e.operand->accept(*this); os << "--";} break;
-      case UNARY_OPERATOR::PRE_INC: os << "++"; if(e.operand) e.operand->accept(*this); break;
-      case UNARY_OPERATOR::PRE_DEC: os << "--"; if(e.operand) e.operand->accept(*this); break;
-      case UNARY_OPERATOR::ADDRESS_OF: os << "&"; if(e.operand) e.operand->accept(*this); break;
-      case UNARY_OPERATOR::DEREFERENCE: os << "*"; if(e.operand) e.operand->accept(*this); break;
-      case UNARY_OPERATOR::PLUS: os << "+"; if(e.operand) e.operand->accept(*this); break;
-      case UNARY_OPERATOR::MINUS: os << "-"; if(e.operand) e.operand->accept(*this); break;
-      case UNARY_OPERATOR::BITWISE_NOT: os << "~"; if(e.operand) e.operand->accept(*this); break;
-      case UNARY_OPERATOR::LOGICAL_NOT: os << "!"; if(e.operand) e.operand->accept(*this); break;
-      case UNARY_OPERATOR::SIZEOF:
-        os << "sizeof";
-        if(e.typeOperand){ os << "("; e.typeOperand->accept(*this); os << ")"; }
-        else if(e.operand){ os << " "; e.operand->accept(*this); }
-        break;
-      case UNARY_OPERATOR::ALIGNOF:
-        os << "_Alignof";
-        if(e.typeOperand){ os << "("; e.typeOperand->accept(*this); os << ")"; }
-        else if(e.operand){ os << " "; e.operand->accept(*this); }
-        break;
     }
   }
 
@@ -202,6 +152,74 @@ struct Printer : ASTWalker {
     return "?";
   }
 
+  void visit(UnaryExpr &e) override {
+    switch(e.op){
+      case UNARY_OPERATOR::INCREMENT: if(e.operand){ e.operand->accept(*this); os << "++";} break;
+      case UNARY_OPERATOR::DECREMENT: if(e.operand){ e.operand->accept(*this); os << "--";} break;
+      case UNARY_OPERATOR::PRE_INC: os << "++"; if(e.operand) e.operand->accept(*this); break;
+      case UNARY_OPERATOR::PRE_DEC: os << "--"; if(e.operand) e.operand->accept(*this); break;
+      case UNARY_OPERATOR::ADDRESS_OF: os << "&"; if(e.operand) e.operand->accept(*this); break;
+      case UNARY_OPERATOR::DEREFERENCE: os << "*"; if(e.operand) e.operand->accept(*this); break;
+      case UNARY_OPERATOR::PLUS: os << "+"; if(e.operand) e.operand->accept(*this); break;
+      case UNARY_OPERATOR::MINUS: os << "-"; if(e.operand) e.operand->accept(*this); break;
+      case UNARY_OPERATOR::BITWISE_NOT: os << "~"; if(e.operand) e.operand->accept(*this); break;
+      case UNARY_OPERATOR::LOGICAL_NOT: os << "!"; if(e.operand) e.operand->accept(*this); break;
+      case UNARY_OPERATOR::SIZEOF:
+        os << "sizeof";
+        if(e.typeOperand){ os << "("; e.typeOperand->accept(*this); os << ")"; }
+        else if(e.operand){ os << " "; e.operand->accept(*this); }
+        break;
+      case UNARY_OPERATOR::ALIGNOF:
+        os << "_Alignof";
+        if(e.typeOperand){ os << "("; e.typeOperand->accept(*this); os << ")"; }
+        else if(e.operand){ os << " "; e.operand->accept(*this); }
+        break;
+    }
+  }
+
+  void visit(IntegerLiteral &e) override {
+    indent();
+    os << "Integer Literal: ";
+    os << e.literal;
+    os << "\n";
+  }
+
+  void visit(FloatingLiteral &e) override {
+    indent();
+    os << "Floating Literal: ";
+    os << e.literal;
+    os << "\n";
+  }
+
+  void visit(CharLiteral &e) override {
+    indent();
+    os << "Character Literal: ";
+    os << e.literal;
+    os << "\n";
+  }
+
+  void visit(StringLiteral &e) override {
+    indent();
+    os << "String Literal: ";
+    os << '"' << e.literal << '"';
+    os << "\n";
+  }
+
+  void visit(IdentifierExpr &e) override {
+    indent();
+    os << "Identifier: ";
+    os << e.literal;
+    os << "\n";
+  }
+
+  void visit(BuiltinType &t) override {
+    indent();
+    os << "Builtin Type: ";
+    printQual(t.qualifiers);
+    os << builtinToString(t.type);
+    os << "\n";
+  }
+
   void visit(CastExpr &e) override {
     os << "(";
     if(e.typeOperand) e.typeOperand->accept(*this);
@@ -210,9 +228,16 @@ struct Printer : ASTWalker {
   }
 
   void visit(BinaryExpr &e) override {
-    if(e.left) e.left->accept(*this);
+    indent();
+    os << "Binary Expression: ";
+    setIndentLevel(indentLevel + 2);
+    if(e.left){
+      e.left->accept(*this);
+    }
     os << " " << binOpToString(e.op) << " ";
-    if(e.right) e.right->accept(*this);
+    if(e.right) {
+      e.right->accept(*this);
+    }
   }
 
   void visit(MemberExpr &e) override {
@@ -229,6 +254,9 @@ struct Printer : ASTWalker {
   }
 
   void visit(CallExpr &e) override {
+    indent();
+    os << "Function Call: ";
+    setIndentLevel(indentLevel + 2);
     if(e.callee) e.callee->accept(*this);
     os << "(";
     for(size_t i = 0; i < e.arguments.size(); ++i){
@@ -239,15 +267,23 @@ struct Printer : ASTWalker {
   }
 
   void visit(NullStmt&) override {
+    indent();
+    os << "Null Statement";
     os << ";\n";
   }
 
   void visit(ExprStmt &s) override {
+    indent();
+    os << "Expression Statement: ";
+    setIndentLevel(indentLevel + 2);
     if(s.expr) s.expr->accept(*this);
     os << ";\n";
   }
 
   void visit(IfStmt &s) override {
+    indent();
+    os << "If Statement:\n";
+    setIndentLevel(indentLevel + 2);
     os << "if (";
     if(s.cond) s.cond->accept(*this);
     os << ") ";
@@ -262,18 +298,10 @@ struct Printer : ASTWalker {
     }
   }
 
-  void visit(SwitchStmt &s) override {
-    os << "switch (";
-    if(s.cond) s.cond->accept(*this);
-    os << ") ";
-    if(s.body) {
-      s.body->accept(*this);
-    } else {
-      os << "{}";
-    }
-  }
-
   void visit(VarDecl &d) override {
+    indent();
+    os << "Variable Declaration: ";
+    setIndentLevel(indentLevel + 2);
     printStorage(d.specs.storage);
     if(d.specs.isInline) os << "inline ";
     if(d.specs.isNoreturn) os << "_Noreturn ";
@@ -289,12 +317,18 @@ struct Printer : ASTWalker {
   }
 
   void visit(ParamDecl &d) override {
+    indent();
+    os << "Parameter Declaration:\n";
+    setIndentLevel(indentLevel + 2);
     if(d.type) d.type->accept(*this);
     if(!d.name.empty()) os << " " << d.name;
     if(d.isVariadic) os << " ...";
   }
 
   void visit(FieldDecl &d) override {
+    indent();
+    os << "Field Declaration: ";
+    setIndentLevel(indentLevel + 2);
     if(d.type) d.type->accept(*this);
     if(!d.name.empty()) os << " " << d.name;
     // if(d.bitWidth && *d.bitWidth){
@@ -305,6 +339,9 @@ struct Printer : ASTWalker {
   }
 
   void visit(FunctionDecl &d) override {
+    indent();
+    os << "Function Declaration:\n";
+    setIndentLevel(indentLevel + 2);
     if(d.return_type) d.return_type->accept(*this);
     os << " " << d.name << "(";
 
@@ -330,22 +367,16 @@ struct Printer : ASTWalker {
     }
   }
 
-  // void visit(EnumDecl &d) override {
-  //   os << "enum "; if(!d.name.empty()) os << d.name;
-  //   if(!d.enumerators.empty()){
-  //     os << " {";
-  //     for(size_t i=0;i<d.enumerators.size();++i){ auto &c = d.enumerators[i]; os << (i?", ":" ") << c.name; if(c.value && *c.value){ os << " = "; (*c.value)->get()->accept(*this);} }
-  //     os << " }";
-  //   }
-  //   os << ";\n";
-  // }
-
   void visit(DeclStmt &s) override {
-    std::cout << "Visiting DeclStmt" << std::endl;
+    indent();
+    os << "Declaration Statement:\n";
     if(s.declaration) s.declaration->accept(*this);
   }
 
   void visit(ConditionalExpr &e) override {
+    indent();
+    os << "Conditional Expression:\n";
+    setIndentLevel(indentLevel + 2);
     if(e.cond) e.cond->accept(*this);
     os << " ? ";
     if(e.thenExpr) e.thenExpr->accept(*this);
@@ -354,16 +385,18 @@ struct Printer : ASTWalker {
   }
 
   void visit(ReturnStmt &s) override {
-    os << "return";
+    indent();
+    os << "Return Statement:\n";
     if(s.value){
-      os << " ";
+      setIndentLevel(indentLevel + 2);
       s.value->accept(*this);
     }
     os << ";\n";
   }
 
   void visit(TranslationUnit &tu) override {
-    std::cout << "Visiting AST Head" << std::endl;
+    std::cout << "AST Head:" << std::endl;
+    setIndentLevel(indentLevel + 2);
     for(const auto& child : tu.children()){
       if(child){
         child->accept(*this);
