@@ -865,7 +865,7 @@ where
               Token::Complex(extra) => (TypeSpecifier::Complex, span_from_extra(extra)),
             },
             struct_or_union_specifier_inner(type_spec.clone()),
-            enum_specifier(),
+            enum_specifier_inner(type_spec.clone()),
         ))
     })
 }
@@ -945,6 +945,14 @@ where
       Token::Struct(extra) => (StructOrUnionKind::Struct, span_from_extra(extra)),
       Token::Union(extra) => (StructOrUnionKind::Union, span_from_extra(extra)),
     }
+}
+
+fn struct_declaration_list<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, Vec<Spanned<StructDeclaration>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token, Span = Span>,
+{
+    struct_declaration_list_inner(type_specifier())
 }
 
 fn struct_declaration_list_inner<'tokens, 'src: 'tokens, I>(
@@ -1069,8 +1077,17 @@ fn enum_specifier<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
+    enum_specifier_inner(type_specifier())
+}
+
+fn enum_specifier_inner<'tokens, 'src: 'tokens, I>(
+    type_spec: impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token, Span = Span>,
+{
+    let _ = type_spec;
     choice((
-        // TODO enum_token span should be returned
         enum_token().ignore_then(left_brace()).ignore_then(enumerator_list()).then_ignore(right_brace()).map(
             |enumerators| {
                 (
@@ -1190,27 +1207,32 @@ fn declarator<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    choice((
-        pointer().then(direct_declarator()).map(|((pointer, pointer_span), (declarator, _declarator_span))| {
-            (Declarator { pointer: Some(pointer), direct_declarator: declarator }, pointer_span)
-        }),
-        direct_declarator().map(|(declarator, declarator_span)| {
-            (Declarator { pointer: Option::None, direct_declarator: declarator }, declarator_span)
-        }),
-    ))
+    recursive(|declarator_rec| {
+        choice((
+            pointer().then(direct_declarator(declarator_rec.clone())).map(
+                |((pointer, pointer_span), (declarator, _declarator_span))| {
+                    (Declarator { pointer: Some(pointer), direct_declarator: declarator }, pointer_span)
+                },
+            ),
+            direct_declarator(declarator_rec.clone()).map(|(declarator, declarator_span)| {
+                (Declarator { pointer: Option::None, direct_declarator: declarator }, declarator_span)
+            }),
+        ))
+    })
 }
 
-fn direct_declarator<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<DirectDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn direct_declarator<'tokens, 'src: 'tokens, I>(
+    declarator_rec: impl Parser<'tokens, I, Spanned<Declarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Spanned<DirectDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    // TODO reformat this using or_not() parser
-    recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|direct| {
+    recursive(|direct| {
         choice((
             identifier()
                 .map(|(identifier, span)| (DirectDeclarator::Identifier(extract_identifier!(identifier)), span)),
-            declarator()
+            declarator_rec
+                .clone()
                 .delimited_by(left_paren(), right_paren())
                 .map(|(declarator, span)| (DirectDeclarator::Declarator(Box::new(declarator)), span)),
             direct.clone().then_ignore(left_bracket()).then_ignore(right_bracket()).map(|(declarator, span)| {
@@ -1236,7 +1258,6 @@ where
             direct
                 .clone()
                 .then_ignore(left_bracket())
-                // since static token can come before or after type qualifiers
                 .then(choice((
                     static_token().ignore_then(type_qualifier_list()),
                     type_qualifier_list().then_ignore(static_token()),
