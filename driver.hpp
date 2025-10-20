@@ -50,6 +50,9 @@ public:
   cAST::Expr* makeConstantIntExpr(int value);
   cAST::Expr* makeConstantFloatExpr(float value);
   cAST::Expr* makeStringLiteral(const std::string& value);
+  cAST::Expr* makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer);
+  cAST::Expr* makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index);
+  cAST::Expr* makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args);
 
   cAST::DeclSpecs makeSpecsFromType(std::unique_ptr<cAST::TypeNode> type);
   cAST::DeclSpecs combineSpecs(cAST::DeclSpecs a, cAST::DeclSpecs b);

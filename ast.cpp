@@ -5,9 +5,6 @@ void BuiltinType::accept(ASTWalker &v){ v.visit(*this); }
 void PointerType::accept(ASTWalker &v){ v.visit(*this); }
 void ArrayType::accept(ASTWalker &v){ v.visit(*this); }
 void FunctionType::accept(ASTWalker &v){ v.visit(*this); }
-// void RecordType::accept(ASTWalker &v){ v.visit(*this); }
-void EnumType::accept(ASTWalker &v){ v.visit(*this); }
-void TypedefType::accept(ASTWalker &v){ v.visit(*this); }
 
 // Expr
 void IntegerLiteral::accept(ASTWalker &v){ v.visit(*this); }
@@ -15,9 +12,9 @@ void FloatingLiteral::accept(ASTWalker &v){ v.visit(*this); }
 void CharLiteral::accept(ASTWalker &v){ v.visit(*this); }
 void StringLiteral::accept(ASTWalker &v){ v.visit(*this); }
 void IdentifierExpr::accept(ASTWalker &v){ v.visit(*this); }
-// void MemberExpr::accept(ASTWalker &v){ v.visit(*this); }
-// void ArraySubscriptExpr::accept(ASTWalker &v){ v.visit(*this); }
-// void CallExpr::accept(ASTWalker &v){ v.visit(*this); }
+void MemberExpr::accept(ASTWalker &v){ v.visit(*this); }
+void ArraySubscriptExpr::accept(ASTWalker &v){ v.visit(*this); }
+void CallExpr::accept(ASTWalker &v){ v.visit(*this); }
 // void CastExpr::accept(ASTWalker &v){ v.visit(*this); }
 void UnaryExpr::accept(ASTWalker &v){ v.visit(*this); }
 void BinaryExpr::accept(ASTWalker &v){ v.visit(*this); }
@@ -35,9 +32,6 @@ void WhileStmt::accept(ASTWalker &v){ v.visit(*this); }
 void DoWhileStmt::accept(ASTWalker &v){ v.visit(*this); }
 void ForStmt::accept(ASTWalker &v){ v.visit(*this); }
 void SwitchStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void CaseStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void DefaultStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void LabelStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void BreakStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void ContinueStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void GotoStmt::accept(ASTWalker &v){ v.visit(*this); }
@@ -47,10 +41,7 @@ void ReturnStmt::accept(ASTWalker &v){ v.visit(*this); }
 // Decl
 void VarDecl::accept(ASTWalker &v){ v.visit(*this); }
 void ParamDecl::accept(ASTWalker &v){ v.visit(*this); }
-// void TypedefDecl::accept(ASTWalker &v){ v.visit(*this); }
 void FieldDecl::accept(ASTWalker &v){ v.visit(*this); }
-// void RecordDecl::accept(ASTWalker &v){ v.visit(*this); }
-// void EnumDecl::accept(ASTWalker &v){ v.visit(*this); }
 void FunctionDecl::accept(ASTWalker &v){ v.visit(*this); }
 void DeclStmt::accept(ASTWalker &v){ v.visit(*this); }
 void TranslationUnit::accept(ASTWalker &v){ v.visit(*this); }
@@ -143,33 +134,6 @@ struct Printer : ASTWalker {
   //   os << ")";
   // }
 
-  // void visit(RecordType &t) override {
-  //   printQual(t.qualifiers);
-  //   os << (t.kind==RecordKind::Struct?"struct ":"union ");
-  //   if(!t.tag.empty()) os << t.tag;
-  //   if(!t.fields.empty()) {
-  //     os << " {\n"; IndentGuard g(indent);
-  //     for(auto &f : t.fields){ pad(); if(f.type) f.type->accept(*this); os << " " << f.name << ";\n"; }
-  //     pad(); os << "}";
-  //   }
-  // }
-
-  // void visit(EnumType &t) override {
-  //   printQual(t.qualifiers);
-  //   os << "enum "; if(!t.tag.empty()) os << t.tag;
-  //   if(!t.constants.empty()){
-  //     os << " {";
-  //     for(size_t i=0;i<t.constants.size();++i){
-  //       auto &c = t.constants[i];
-  //       os << (i?", ":" ") << c.name;
-  //       if(c.value && *c.value){ os << " = "; (*c.value)->get()->accept(*this); }
-  //     }
-  //     os << " }";
-  //   }
-  // }
-
-  void visit(TypedefType &t) override { printQual(t.qualifiers); os << t.name; }
-
   //=== Expr ===
   void visit(IntegerLiteral &e) override { os << e.literal; }
   void visit(FloatingLiteral &e) override { os << e.literal; }
@@ -244,11 +208,28 @@ struct Printer : ASTWalker {
     if(e.right) e.right->accept(*this);
   }
 
-  // void visit(ConditionalOp &e) override {
-  //   if(e.cond) e.cond->accept(*this);
-  //   os << " ? "; if(e.thenExpr) e.thenExpr->accept(*this);
-  //   os << " : "; if(e.elseExpr) e.elseExpr->accept(*this);
-  // }
+  void visit(MemberExpr &e) override {
+    if(e.base) e.base->accept(*this);
+    os << (e.isPointer ? "->" : ".");
+    os << e.memberName;
+  }
+
+  void visit(ArraySubscriptExpr &e) override {
+    if(e.base) e.base->accept(*this);
+    os << "[";
+    if(e.index) e.index->accept(*this);
+    os << "]";
+  }
+
+  void visit(CallExpr &e) override {
+    if(e.callee) e.callee->accept(*this);
+    os << "(";
+    for(size_t i = 0; i < e.arguments.size(); ++i){
+      if(i) os << ", ";
+      if(e.arguments[i]) e.arguments[i]->accept(*this);
+    }
+    os << ")";
+  }
 
   void visit(NullStmt&) override {
     os << ";\n";

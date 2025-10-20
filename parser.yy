@@ -64,17 +64,15 @@
 %token ALIGNAS ALIGNOF ATOMIC GENERIC NORETURN STATIC_ASSERT THREAD_LOCAL
 
 %type <std::unique_ptr<cAST::Expr>>
-  primary_expression constant string generic_selection
+  primary_expression constant string initializer
   postfix_expression unary_expression cast_expression
   multiplicative_expression additive_expression shift_expression
   relational_expression equality_expression and_expression
   exclusive_or_expression inclusive_or_expression
   logical_and_expression logical_or_expression
   conditional_expression assignment_expression expression
-   initializer
 
-%type <std::vector<std::unique_ptr<cAST::Expr>>> argument_expression_list
-/* %type <std::vector<std::unique_ptr<AST::Expr>>> initializer_list */
+%type <std::vector<std::unique_ptr<cAST::Expr>>> argument_expression_list initializer_list
 
 %type <cAST::UNARY_OPERATOR> unary_operator
 %type <cAST::AssignOp> assignment_operator
@@ -89,16 +87,12 @@
 %type <std::vector<std::unique_ptr<cAST::Stmt>>> block_item_list
 
 %type <std::unique_ptr<cAST::Decl>> declaration external_declaration function_definition
-/* %type <std::unique_ptr<AST::Decl>> init_declarator */
 
 %type <cAST::DeclSpecs> declaration_specifiers specifier_qualifier_list
-/* %type <AST::DeclSpecs> specifier_qualifier_list */
 
 %type <std::unique_ptr<cAST::TypeNode>> type_specifier type_name
-/* %type <std::unique_ptr<AST::TypeNode>> atomic_type_specifier struct_or_union_specifier */
 
 %type <std::unique_ptr<cAST::Decl>> declarator direct_declarator pointer
-/* %type <AST::Declarator> abstract_declarator direct_abstract_declarator */
 
 %type <std::vector<std::unique_ptr<cAST::ParamDecl>>> parameter_list parameter_type_list
 %type <std::unique_ptr<cAST::ParamDecl>> parameter_declaration

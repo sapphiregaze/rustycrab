@@ -247,6 +247,44 @@ cAST::Expr* cAST::Driver::singleton(std::unique_ptr<cAST::Expr> expr) {
   return push_expression(std::move(expr));
 }
 
+cAST::Expr* cAST::Driver::makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer) {
+  std::cout << "Making member access expr for member " << memberName << (isPointer ? " via pointer\n" : "\n");
+  auto node = std::make_unique<cAST::MemberExpr>();
+  node->set_parent(head());
+  cAST::Expr* raw = node.get();
+  node->set_base(std::move(base));
+  if (node->base) node->base->set_parent(raw);
+  node->memberName = memberName;
+  node->isPointer = isPointer;
+  return raw;
+}
+
+cAST::Expr* cAST::Driver::makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index) {
+  std::cout << "Making array subscript expr\n";
+  auto node = std::make_unique<cAST::ArraySubscriptExpr>();
+  node->set_parent(head());
+  cAST::Expr* raw = node.get();
+  node->set_base(std::move(base));
+  if (node->base) node->base->set_parent(raw);
+  node->set_index(std::move(index));
+  if (node->index) node->index->set_parent(raw);
+  return raw;
+}
+
+cAST::Expr* cAST::Driver::makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args) {
+  std::cout << "Making function call expr\n";
+  auto node = std::make_unique<cAST::CallExpr>();
+  node->set_parent(head());
+  cAST::Expr* raw = node.get();
+  node->set_callee(std::move(callee));
+  if (node->callee) node->callee->set_parent(raw);
+  for (auto& arg : args) {
+    arg->set_parent(raw);
+    node->arguments.push_back(std::move(arg));
+  }
+  return raw;
+}
+
 cAST::DeclSpecs cAST::Driver::makeSpecsFromType(std::unique_ptr<cAST::TypeNode> type) {
   DeclSpecs specs;
   specs.type = std::move(type);

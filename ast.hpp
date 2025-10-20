@@ -185,10 +185,7 @@ void prettyprint(ASTNode &n, std::ostream &os);
 // // Decl
 // struct VarDecl;
 // struct ParamDecl;
-// struct TypedefDecl;
 // struct FieldDecl;
-// struct RecordDecl;
-// struct EnumDecl;
 // struct FunctionDecl;
 // struct DeclStmt;
 // struct TranslationUnit;
@@ -297,6 +294,37 @@ struct ConditionalExpr : public Expr {
   void accept(ASTWalker &v) override;
 };
 
+struct MemberExpr : public Expr {
+  std::unique_ptr<Expr> base;
+  std::string memberName;
+  bool isPointer{false};
+  void set_base(std::unique_ptr<Expr> b) {
+    base = std::move(b);
+  }
+  void accept(ASTWalker &v) override;
+};
+
+struct ArraySubscriptExpr : public Expr {
+  std::unique_ptr<Expr> base;
+  std::unique_ptr<Expr> index;
+  void set_base(std::unique_ptr<Expr> b) {
+    base = std::move(b);
+  }
+  void set_index(std::unique_ptr<Expr> idx) {
+    index = std::move(idx);
+  }
+  void accept(ASTWalker &v) override;
+};
+
+struct CallExpr : public Expr {
+  std::unique_ptr<Expr> callee;
+  std::vector<std::unique_ptr<Expr>> arguments;
+  void set_callee(std::unique_ptr<Expr> c) {
+    callee = std::move(c);
+  }
+  void accept(ASTWalker &v) override;
+};
+
 // statements
 struct Stmt : public ASTNode {
   virtual ~Stmt() = default;
@@ -389,20 +417,6 @@ struct FieldDecl : public Decl {
   void accept(ASTWalker &v) override;
 };
 
-  //   {
-  //     // Build AST::FunctionDecl(specs, declarator, body, locals = $3)
-  //     auto fn = std::make_unique<AST::FunctionDecl>(/* use $1, $2 */);
-  //     fn->set_body(std::move($4));                 // if your body is a Stmt unique_ptr
-  //     fn->set_locals(std::move($3));               // vector<unique_ptr<Decl>>
-  //     $$ = std::move(fn);                          // unique_ptr<Decl>
-  //   }
-  // | declaration_specifiers declarator compound_statement
-  //   {
-  //     auto fn = std::make_unique<AST::FunctionDecl>(/* use $1, $2 */);
-  //     fn->set_body(std::move($3));
-  //     $$ = std::move(fn);                          // unique_ptr<Decl>
-  //   }
-
 struct FunctionDecl : public Decl {
   std::string name;
   std::unique_ptr<TypeNode> return_type;
@@ -462,22 +476,6 @@ struct FunctionType : public TypeNode {
   void accept(ASTWalker &v) override;
 };
 
-// struct RecordType : public TypeNode {
-//   std::string recordName;
-//   std::vector<FieldDecl*> fields;
-//   void accept(ASTWalker &v) override;
-// };
-
-struct EnumType : public TypeNode {
-  std::string enumName;
-  void accept(ASTWalker &v) override;
-};
-
-struct TypedefType : public TypeNode {
-  std::string typedefName;
-  void accept(ASTWalker &v) override;
-};
-
 struct ASTWalker {
   virtual ~ASTWalker() = default;
 
@@ -486,9 +484,6 @@ struct ASTWalker {
   virtual void visit(PointerType&) {}
   virtual void visit(ArrayType&) {}
   virtual void visit(FunctionType&) {}
-  // virtual void visit(RecordType&) {}
-  virtual void visit(EnumType&) {}
-  virtual void visit(TypedefType&) {}
 
   // Expr
   virtual void visit(IntegerLiteral&) {}
@@ -496,9 +491,9 @@ struct ASTWalker {
   virtual void visit(CharLiteral&) {}
   virtual void visit(StringLiteral&) {}
   virtual void visit(IdentifierExpr&) {}
-  // virtual void visit(MemberExpr&) {}
-  // virtual void visit(ArraySubscriptExpr&) {}
-  // virtual void visit(CallExpr&) {}
+  virtual void visit(MemberExpr&) {}
+  virtual void visit(ArraySubscriptExpr&) {}
+  virtual void visit(CallExpr&) {}
   // virtual void visit(CastExpr&) {}
   virtual void visit(UnaryExpr&) {}
   virtual void visit(BinaryExpr&) {}
