@@ -131,10 +131,10 @@ generic_selection
       std::vector<std::pair<std::unique_ptr<AST::TypeNode>, std::unique_ptr<AST::Expr>>> assocs;
       std::unique_ptr<AST::Expr> def;
       for (auto &p : $5) {
-        if (p.first) assocs.emplace_back(std::move(p));
+        if (p.first) driver.emplace_back(std::move(p));
         else def = std::move(p.second);
       }
-      $$ = ast.makeGenericSelection(std::move($3), std::move(assocs), std::move(def), @1);
+      $$ = driver.makeGenericSelection(std::move($3), std::move(assocs), std::move(def));
     }
   ;
 
@@ -150,32 +150,32 @@ generic_association
 
 postfix_expression
   : primary_expression                          { $$ = std::move($1); }
-  | postfix_expression '[' expression ']'       { $$ = ast.makeSubscript(std::move($1), std::move($3), @2); }
-  | postfix_expression '(' ')'                  { $$ = ast.makeCall(std::move($1), {}, @2); }
+  | postfix_expression '[' expression ']'       { $$ = driver.makeSubscript(std::move($1), std::move($3)); }
+  | postfix_expression '(' ')'                  { $$ = driver.makeCall(std::move($1), {}); }
   | postfix_expression '(' argument_expression_list ')'
-                                                { $$ = ast.makeCall(std::move($1), std::move($3), @2); }
-  | postfix_expression '.' IDENTIFIER           { $$ = ast.makeMember(std::move($1), *$3, false, @2); }
-  | postfix_expression PTR_OP IDENTIFIER        { $$ = ast.makeMember(std::move($1), *$3, true,  @2); }
-  | postfix_expression INC_OP                   { $$ = ast.makeUnary(AST::UnaryOp::PostInc, std::move($1), @2); }
-  | postfix_expression DEC_OP                   { $$ = ast.makeUnary(AST::UnaryOp::PostDec, std::move($1), @2); }
-  | '(' type_name ')' '{' initializer_list '}'  { $$ = ast.makeCompoundLiteral(std::move($2), ast.makeInitList(std::move($5), @4), @1); }
-  | '(' type_name ')' '{' initializer_list ',' '}' { $$ = ast.makeCompoundLiteral(std::move($2), ast.makeInitList(std::move($5), @4), @1); }
+                                                { $$ = driver.makeCall(std::move($1), std::move($3)); }
+  | postfix_expression '.' IDENTIFIER           { $$ = driver.makeMember(std::move($1), *$3, false); }
+  | postfix_expression PTR_OP IDENTIFIER        { $$ = driver.makeMember(std::move($1), *$3, true); }
+  | postfix_expression INC_OP                   { $$ = driver.makeUnary(AST::UnaryOp::PostInc, std::move($1)); }
+  | postfix_expression DEC_OP                   { $$ = driver.makeUnary(AST::UnaryOp::PostDec, std::move($1)); }
+  | '(' type_name ')' '{' initializer_list '}'  { $$ = driver.makeCompoundLiteral(std::move($2), driver.makeInitList(std::move($5))); }
+  | '(' type_name ')' '{' initializer_list ',' '}' { $$ = driver.makeCompoundLiteral(std::move($2), driver.makeInitList(std::move($5))); }
   ;
 
 argument_expression_list
-  : assignment_expression                       { $$ = ast.singleton(std::move($1)); }
+  : assignment_expression                       { $$ = driver.singleton(std::move($1)); }
   | argument_expression_list ',' assignment_expression
                                                 { $1.emplace_back(std::move($3)); $$ = std::move($1); }
   ;
 
 unary_expression
   : postfix_expression                           { $$ = std::move($1); }
-  | INC_OP unary_expression                      { $$ = ast.makeUnary(AST::UnaryOp::PreInc, std::move($2), @1); }
-  | DEC_OP unary_expression                      { $$ = ast.makeUnary(AST::UnaryOp::PreDec, std::move($2), @1); }
-  | unary_operator cast_expression               { $$ = ast.makeUnary($1, std::move($2), @1); }
-  | SIZEOF unary_expression                      { /* make it a builtin unary if you model it */ $$ = ast.makeUnary(AST::UnaryOp::SizeofExpr /* custom */, std::move($2), @1); }
-  | SIZEOF '(' type_name ')'                     { $$ = ast.makeCast(/*sizeof-type as expr*/ std::move($3), nullptr, @1); /* or a dedicated node */ }
-  | ALIGNOF '(' type_name ')'                    { $$ = ast.makeCast(/*alignof-type expr*/ std::move($3), nullptr, @1); }
+  | INC_OP unary_expression                      { $$ = driver.makeUnary(AST::UnaryOp::PreInc, std::move($2)); }
+  | DEC_OP unary_expression                      { $$ = driver.makeUnary(AST::UnaryOp::PreDec, std::move($2)); }
+  | unary_operator cast_expression               { $$ = driver.makeUnary($1, std::move($2)); }
+  /* | SIZEOF unary_expression                      { make it a builtin unary if you model it$$ = driver.makeUnary(AST::UnaryOp::SizeofExpr custom, std::move($2), @1); } */
+  /* | SIZEOF '(' type_name ')'                     { $$ = driver.makeCast(sizeof-type as expr std::move($3), nullptr, @1); or a dedicated node } */
+  /* | ALIGNOF '(' type_name ')'                    { $$ = driver.makeCast(alignof-type expr std::move($3), nullptr, @1); } */
   ;
 
 unary_operator
@@ -189,78 +189,78 @@ unary_operator
 
 cast_expression
   : unary_expression                              { $$ = std::move($1); }
-  | '(' type_name ')' cast_expression             { $$ = ast.makeCast(std::move($2), std::move($4), @1); }
+  | '(' type_name ')' cast_expression             { $$ = driver.makeCast(std::move($2), std::move($4)); }
   ;
 
 multiplicative_expression
   : cast_expression                              { $$ = std::move($1); }
-  | multiplicative_expression '*' cast_expression{ $$ = ast.makeBinary(AST::BinOp::Mul, std::move($1), std::move($3), @2); }
-  | multiplicative_expression '/' cast_expression{ $$ = ast.makeBinary(AST::BinOp::Div, std::move($1), std::move($3), @2); }
-  | multiplicative_expression '%' cast_expression{ $$ = ast.makeBinary(AST::BinOp::Mod, std::move($1), std::move($3), @2); }
+  | multiplicative_expression '*' cast_expression{ $$ = driver.makeBinary(AST::BinOp::Mul, std::move($1), std::move($3)); }
+  | multiplicative_expression '/' cast_expression{ $$ = driver.makeBinary(AST::BinOp::Div, std::move($1), std::move($3)); }
+  | multiplicative_expression '%' cast_expression{ $$ = driver.makeBinary(AST::BinOp::Mod, std::move($1), std::move($3)); }
   ;
 
 additive_expression
   : multiplicative_expression                    { $$ = std::move($1); }
   | additive_expression '+' multiplicative_expression
-                                                { $$ = ast.makeBinary(AST::BinOp::Add, std::move($1), std::move($3), @2); }
+                                                { $$ = driver.makeBinary(AST::BinOp::Add, std::move($1), std::move($3)); }
   | additive_expression '-' multiplicative_expression
-                                                { $$ = ast.makeBinary(AST::BinOp::Sub, std::move($1), std::move($3), @2); }
+                                                { $$ = driver.makeBinary(AST::BinOp::Sub, std::move($1), std::move($3)); }
   ;
 
 shift_expression
   : additive_expression                          { $$ = std::move($1); }
-  | shift_expression LEFT_OP additive_expression { $$ = ast.makeBinary(AST::BinOp::Shl, std::move($1), std::move($3), @2); }
-  | shift_expression RIGHT_OP additive_expression{ $$ = ast.makeBinary(AST::BinOp::Shr, std::move($1), std::move($3), @2); }
+  | shift_expression LEFT_OP additive_expression { $$ = driver.makeBinary(AST::BinOp::Shl, std::move($1), std::move($3)); }
+  | shift_expression RIGHT_OP additive_expression{ $$ = driver.makeBinary(AST::BinOp::Shr, std::move($1), std::move($3)); }
   ;
 
 relational_expression
   : shift_expression                             { $$ = std::move($1); }
-  | relational_expression '<' shift_expression   { $$ = ast.makeBinary(AST::BinOp::Lt, std::move($1), std::move($3), @2); }
-  | relational_expression '>' shift_expression   { $$ = ast.makeBinary(AST::BinOp::Gt, std::move($1), std::move($3), @2); }
-  | relational_expression LE_OP shift_expression { $$ = ast.makeBinary(AST::BinOp::Le, std::move($1), std::move($3), @2); }
-  | relational_expression GE_OP shift_expression { $$ = ast.makeBinary(AST::BinOp::Ge, std::move($1), std::move($3), @2); }
+  | relational_expression '<' shift_expression   { $$ = driver.makeBinary(AST::BinOp::Lt, std::move($1), std::move($3)); }
+  | relational_expression '>' shift_expression   { $$ = driver.makeBinary(AST::BinOp::Gt, std::move($1), std::move($3)); }
+  | relational_expression LE_OP shift_expression { $$ = driver.makeBinary(AST::BinOp::Le, std::move($1), std::move($3)); }
+  | relational_expression GE_OP shift_expression { $$ = driver.makeBinary(AST::BinOp::Ge, std::move($1), std::move($3)); }
   ;
 
 equality_expression
   : relational_expression                        { $$ = std::move($1); }
   | equality_expression EQ_OP relational_expression
-                                                { $$ = ast.makeBinary(AST::BinOp::Eq, std::move($1), std::move($3), @2); }
+                                                { $$ = driver.makeBinary(AST::BinOp::Eq, std::move($1), std::move($3)); }
   | equality_expression NE_OP relational_expression
-                                                { $$ = ast.makeBinary(AST::BinOp::Ne, std::move($1), std::move($3), @2); }
+                                                { $$ = driver.makeBinary(AST::BinOp::Ne, std::move($1), std::move($3)); }
   ;
 
 and_expression
   : equality_expression                          { $$ = std::move($1); }
-  | and_expression '&' equality_expression       { $$ = ast.makeBinary(AST::BinOp::BitAnd, std::move($1), std::move($3), @2); }
+  | and_expression '&' equality_expression       { $$ = driver.makeBinary(AST::BinOp::BitAnd, std::move($1), std::move($3)); }
   ;
 
 exclusive_or_expression
   : and_expression                               { $$ = std::move($1); }
-  | exclusive_or_expression '^' and_expression   { $$ = ast.makeBinary(AST::BinOp::BitXor, std::move($1), std::move($3), @2); }
+  | exclusive_or_expression '^' and_expression   { $$ = driver.makeBinary(AST::BinOp::BitXor, std::move($1), std::move($3)); }
   ;
 
 inclusive_or_expression
   : exclusive_or_expression                      { $$ = std::move($1); }
   | inclusive_or_expression '|' exclusive_or_expression
-                                                { $$ = ast.makeBinary(AST::BinOp::BitOr, std::move($1), std::move($3), @2); }
+                                                { $$ = driver.makeBinary(AST::BinOp::BitOr, std::move($1), std::move($3)); }
   ;
 
 logical_and_expression
   : inclusive_or_expression                      { $$ = std::move($1); }
   | logical_and_expression AND_OP inclusive_or_expression
-                                                { $$ = ast.makeBinary(AST::BinOp::LogAnd, std::move($1), std::move($3), @2); }
+                                                { $$ = driver.makeBinary(AST::BinOp::LogAnd, std::move($1), std::move($3)); }
   ;
 
 logical_or_expression
   : logical_and_expression                       { $$ = std::move($1); }
   | logical_or_expression OR_OP logical_and_expression
-                                                { $$ = ast.makeBinary(AST::BinOp::LogOr, std::move($1), std::move($3), @2); }
+                                                { $$ = driver.makeBinary(AST::BinOp::LogOr, std::move($1), std::move($3)); }
   ;
 
 conditional_expression
   : logical_or_expression                        { $$ = std::move($1); }
   | logical_or_expression '?' expression ':' conditional_expression
-                                                { $$ = ast.makeCond(std::move($1), std::move($3), std::move($5), @2); }
+                                                { $$ = driver.makeCond(std::move($1), std::move($3), std::move($5)); }
   ;
 
 assignment_operator
@@ -280,12 +280,12 @@ assignment_operator
 assignment_expression
   : conditional_expression                        { $$ = std::move($1); }
   | unary_expression assignment_operator assignment_expression
-                                                 { $$ = ast.makeAssign($2, std::move($1), std::move($3), @2); }
+                                                 { $$ = driver.makeAssign($2, std::move($1), std::move($3)); }
   ;
 
 expression
   : assignment_expression                         { $$ = std::move($1); }
-  | expression ',' assignment_expression          { $$ = ast.makeBinary(AST::BinOp::Comma, std::move($1), std::move($3), @2); }
+  | expression ',' assignment_expression          { $$ = driver.makeBinary(AST::BinOp::Comma, std::move($1), std::move($3)); }
   ;
 
 constant_expression
@@ -300,67 +300,64 @@ declaration
       }
   | declaration_specifiers init_declarator_list ';'
       {
+        std::cout << "Declaration Specifier with init declarator list: Not Implemented!" << std::endl;
         // Expand list into either a DeclStmt with multiple VarDecls,
         // or if a function with body appears elsewhere (function_definition rule).
         // Here we return a single Decl that wraps many (DeclStmt) or the first, per your AST design.
         // Minimal: return the first Decl; push others via driver/builder outside.
-        $$ = std::move($2.front()); // skeleton; adapt to your TU collector
+        /* $$ = std::move($2.front()); // skeleton; adapt to your TU collector
         $2.erase($2.begin());
-        for (auto &more : $2) {
-          /* ast.enqueueExternal(std::move(more)); */ /* or push into TU later */
-        }
+        for (auto &more : $2) { */
+          /* driver.enqueueExternal(std::move(more)); */ /* or push into TU later */
       }
   | static_assert_declaration       { $$ = std::move($1); } /* if you model it as a Decl */
   ;
 
 declaration_specifiers
   : type_specifier declaration_specifiers
-      { $$ = ast.combineSpecs(ast.makeSpecsFromType(std::move($1)), $2); }
+      { $$ = driver.combineSpecs(driver.makeSpecsFromType(std::move($1)), $2); }
   | type_specifier
-      { $$ = ast.makeSpecsFromType(std::move($1)); }
-  | type_qualifier declaration_specifiers
-      { $$ = ast.combineSpecs(ast.makeSpecsFromType(/*qual to type*/ ast.makeBuiltinType(/*qual-as-type or wrap*/, @1.first_line)), $2); /* or fold into specs.tq */ }
-  | type_qualifier
-      { $$ = ast.makeSpecsFromType(/*qual*/ ast.makeBuiltinType(/*...*/, @1.first_line)); }
+      { $$ = driver.makeSpecsFromType(std::move($1)); }
+  /* | type_qualifier declaration_specifiers
+      { $$ = driver.combineSpecs(driver.makeSpecsFromType(driver.makeBuiltinType()), $2); } */
+  /* | type_qualifier { $$ = driver.makeSpecsFromType(driver.makeBuiltinType()); } */
   /*storage wraps*/
   /* | storage_class_specifier declaration_specifiers */
-      /* { $$ = ast.combineSpecs(ast.makeSpecsFromType( nullptr), $2); } */
+      /* { $$ = driver.combineSpecs(driver.makeSpecsFromType( nullptr), $2); } */
   /*storage*/
   /* | storage_class_specifier */
-      /* { $$ = ast.makeSpecsFromType(nullptr); } */
-  | function_specifier declaration_specifiers
-      { $$ = ast.combineSpecs(ast.makeSpecsFromType(/*fn spec*/ nullptr), $2); }
-  | function_specifier
-      { $$ = ast.makeSpecsFromType(/*fn spec*/ nullptr); }
+      /* { $$ = driver.makeSpecsFromType(nullptr); } */
+  /* | function_specifier declaration_specifiers { $$ = driver.combineSpecs(driver.makeSpecsFromType(nullptr), $2); } */
+  /* | function_specifier { $$ = driver.makeSpecsFromType(nullptr); } */
   /* | alignment_specifier declaration_specifiers */
       /*align*/
-      /* { $$ = ast.combineSpecs(ast.makeSpecsFromType( nullptr), $2); } */
+      /* { $$ = driver.combineSpecs(driver.makeSpecsFromType( nullptr), $2); } */
       /*align*/
   /* | alignment_specifier */
-      /* { $$ = ast.makeSpecsFromType( nullptr); } */
+      /* { $$ = driver.makeSpecsFromType( nullptr); } */
   ;
 
-init_declarator_list
-  : init_declarator                         { $$ = std::vector{ std::move($1) }; }
-  | init_declarator_list ',' init_declarator
-                                           { $1.emplace_back(std::move($3)); $$ = std::move($1); }
+/* init_declarator_list */
+  /* : init_declarator                         { $$ = std::vector{ std::move($1) }; } */
+  /* | init_declarator_list ',' init_declarator */
+                                           /* { $1.emplace_back(std::move($3)); $$ = std::move($1); } */
   ;
 
-init_declarator
+/* init_declarator
   : declarator '=' initializer
-      {
+      { */
         // Var or function declarator with initializer (functions can’t init here, so it’s a VarDecl)
-        $$ = ast.makeVarDecl(/*specs must be threaded from context — see typical C grammar split*/,
-                             $1, /*init*/ std::move($3), @2);
+        /*specs must be threaded from context — see typical C grammar split*/
+        // $$ = driver.makeVarDecl(, $1, std::move($3));
         /* In standard C grammars, specs + list are in the same production; if you keep them split,
            capture 'current specs' in parser state or pass them down via midrule. */
-      }
-  | declarator
-      {
+      // }
+  /* | declarator */
+      /* { */
         // No init; could be a function proto or a variable
-        $$ = ast.makeVarDecl(/*specs*/, $1, /*init*/ nullptr, @1);
-      }
-  ;
+        // $$ = driver.makeVarDecl(, $1, nullptr, @1);
+      /* } */
+  /* ; */
 
 storage_class_specifier
 	: TYPEDEF	{ $$ = AST::TYPE_STORAGE_QUALIFIER::Typedef; }
@@ -372,16 +369,16 @@ storage_class_specifier
 	;
 
 type_specifier
-	: VOID { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Void, @1.first_line); }
-	| CHAR { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Char, @1.first_line); }
+	: VOID { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Void); }
+	| CHAR { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Char); }
 	/* | SHORT { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Short, @1.first_line); } */
-	| INT { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Int, @1.first_line); }
-	| LONG { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Long, @1.first_line); }
-	| FLOAT { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Float, @1.first_line); }
-	| DOUBLE { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Double, @1.first_line); }
+	| INT { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Int); }
+	| LONG { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Long); }
+	| FLOAT { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Float); }
+	| DOUBLE { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Double); }
 	/* | SIGNED { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Signed, @1.first_line); } */
 	/* | UNSIGNED { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Unsigned, @1.first_line); } */
-	| BOOL { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Bool, @1.first_line); }
+	| BOOL { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Bool); }
 	/* | COMPLEX { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Complex, @1.first_line); } */
 	/* | IMAGINARY { $$ = driver.makeBuiltinType(AST::BUILTIN_TYPE::Imaginary, @1.first_line); } */
 	/* | atomic_type_specifier { $$ = std::move($1); } */
@@ -393,15 +390,15 @@ type_specifier
 /* struct_or_union_specifier
 	: struct_or_union '{' struct_declaration_list '}' {
         // anonymous struct/union
-        $$ = ast.makeStructUnion(nullptr, $1, std::move($3), @2);
+        $$ = driver.makeStructUnion(nullptr, $1, std::move($3), @2);
       }
 	| struct_or_union IDENTIFIER '{' struct_declaration_list '}' {
         // named struct/union
-        $$ = ast.makeStructUnion(std::move($2), $1, std::move($4), @2);
+        $$ = driver.makeStructUnion(std::move($2), $1, std::move($4), @2);
       }
 	| struct_or_union IDENTIFIER {
         // forward declaration
-        $$ = ast.makeStructUnion(std::move($2), $1, {}, @1);
+        $$ = driver.makeStructUnion(std::move($2), $1, {}, @1);
       }
 	;
 */
@@ -481,35 +478,35 @@ function_specifier
 	; */
 
 declarator
-  : pointer direct_declarator           { $$ = ast.wrapPointer($2, @1); /* wrap chain already in $1 or combine both; adjust */ }
+  : pointer direct_declarator           { $$ = driver.wrapPointer($2); /* wrap chain already in $1 or combine both; adjust */ }
   | direct_declarator                   { $$ = std::move($1); }
   ;
 
 direct_declarator
-	: IDENTIFIER { $$ = ast.makeIdentDeclarator(*$1, @1); }
+	: IDENTIFIER { $$ = driver.makeIdentDeclarator(*$1); }
 	| '(' declarator ')' { $$ = std::move($2); }
-	| direct_declarator '[' ']' { $$ = ast.wrapArray($1, /*size*/ nullptr, @2); }
-	/* | direct_declarator '[' '*' ']' { $$ = ast.wrapArray($1, nullptr, @2); } */
-	/* | direct_declarator '[' STATIC type_qualifier_list assignment_expression ']' { $$ = ast.wrapArray($1, std::move($4), @2); } */
-	/* | direct_declarator '[' STATIC assignment_expression ']' { $$ = ast.wrapArray($1, std::move($3), @2); } */
-	/* | direct_declarator '[' type_qualifier_list '*' ']' { $$ = ast.wrapArray($1, nullptr, @2); } */
-	/* | direct_declarator '[' type_qualifier_list STATIC assignment_expression ']' { $$ = ast.wrapArray($1, std::move($4), @2); } */
-	| direct_declarator '[' type_qualifier_list assignment_expression ']' { $$ = ast.wrapArray($1, std::move($4), @2); }
+	| direct_declarator '[' ']' { $$ = driver.wrapArray($1, nullptr); }
+	/* | direct_declarator '[' '*' ']' { $$ = driver.wrapArray($1, nullptr, @2); } */
+	/* | direct_declarator '[' STATIC type_qualifier_list assignment_expression ']' { $$ = driver.wrapArray($1, std::move($4), @2); } */
+	/* | direct_declarator '[' STATIC assignment_expression ']' { $$ = driver.wrapArray($1, std::move($3), @2); } */
+	/* | direct_declarator '[' type_qualifier_list '*' ']' { $$ = driver.wrapArray($1, nullptr, @2); } */
+	/* | direct_declarator '[' type_qualifier_list STATIC assignment_expression ']' { $$ = driver.wrapArray($1, std::move($4), @2); } */
+	| direct_declarator '[' type_qualifier_list assignment_expression ']' { $$ = driver.wrapArray($1, std::move($4)); }
   // unsized
-	/* | direct_declarator '[' type_qualifier_list ']' { $$ = ast.wrapArray($1, nullptr, @2); } */
-	| direct_declarator '[' assignment_expression ']' { $$ = ast.wrapArray($1, std::move($3), @2); }
+	/* | direct_declarator '[' type_qualifier_list ']' { $$ = driver.wrapArray($1, nullptr, @2); } */
+	| direct_declarator '[' assignment_expression ']' { $$ = driver.wrapArray($1, std::move($3)); }
   // variadic set in list
-	/* | direct_declarator '(' parameter_type_list ')' { $$ = ast.wrapFunction($1, std::move($3), , @2); } */
-	| direct_declarator '(' ')' { $$ = ast.wrapFunction($1, {}, /*variadic*/ false, @2); }
+	/* | direct_declarator '(' parameter_type_list ')' { $$ = driver.wrapFunction($1, std::move($3), , @2); } */
+	| direct_declarator '(' ')' { $$ = driver.wrapFunction($1, {}, /*variadic*/ false); }
 	/* K&R parameters — map to ParamDecl with 'int' default or leave TODO */
-  /* | direct_declarator '(' identifier_list ')' {  $$ = ast.wrapFunction($1, {TODO}, false, @2); } */
+  /* | direct_declarator '(' identifier_list ')' {  $$ = driver.wrapFunction($1, {TODO}, false, @2); } */
 
 pointer
 // fold quals into inner then wrap
-  /* : '*' type_qualifier_list pointer     { $$ = $3; $$ = ast.wrapPointer($$, @1); } */
-  | '*' type_qualifier_list             { $$ = ast.wrapPointer(AST::Declarator{}, @1); }
-  | '*' pointer                         { $$ = ast.wrapPointer($2, @1); }
-  | '*'                                 { $$ = ast.wrapPointer(AST::Declarator{}, @1); }
+  /* : '*' type_qualifier_list pointer     { $$ = $3; $$ = driver.wrapPointer($$, @1); } */
+  | '*' type_qualifier_list             { $$ = driver.wrapPointer(AST::Declarator{}); }
+  | '*' pointer                         { $$ = driver.wrapPointer($2); }
+  | '*'                                 { $$ = driver.wrapPointer(AST::Declarator{}); }
   ;
 
 parameter_type_list
@@ -526,16 +523,16 @@ parameter_list
 
 parameter_declaration
   : declaration_specifiers declarator
-      { $$ = ast.makeParam($1, $2, @2); }
+      { $$ = driver.makeParam($1, $2); }
   | declaration_specifiers abstract_declarator
-      { $$ = ast.makeParam($1, $2, @2); }
+      { $$ = driver.makeParam($1, $2); }
   | declaration_specifiers
-      { $$ = ast.makeParam($1, AST::Declarator{}, @1); }
+      { $$ = driver.makeParam($1, AST::Declarator{}); }
   ;
 
 type_name : specifier_qualifier_list { $$ = std::move($1.type); }
   /* apply abstract declarator to base type into a TypeNode */
-  /* : specifier_qualifier_list abstract_declarator {$$ = ast.applyAbstract($1, $2) std::move($1.type); } */
+  /* : specifier_qualifier_list abstract_declarator {$$ = driver.applyAbstract($1, $2) std::move($1.type); } */
   ;
 
 type_qualifier_list
@@ -579,13 +576,13 @@ identifier_list
 	; */
 
 initializer: assignment_expression { $$ = std::move($1); }
-  /* : '{' initializer_list '}'           { $$ = ast.makeInitList(std::move($2), @1); }
-  | '{' initializer_list ',' '}'       { $$ = ast.makeInitList(std::move($2), @1); } */
+  /* : '{' initializer_list '}'           { $$ = driver.makeInitList(std::move($2), @1); }
+  | '{' initializer_list ',' '}'       { $$ = driver.makeInitList(std::move($2), @1); } */
   ;
 
 initializer_list
 	: designation initializer
-	| initializer { $$ = ast.singleton(std::move($1)); }
+	| initializer { $$ = driver.singleton(std::move($1)); }
 	/* | initializer_list ',' designation initializer
 	| initializer_list ',' initializer { $1.emplace_back(std::move($3)); $$ = std::move($1); } */
 	;
@@ -618,62 +615,62 @@ statement
   ;
 
 labeled_statement
-  : IDENTIFIER ':' statement        { $$ = ast.makeLabel(*$1, std::move($3), @1); }
+  : IDENTIFIER ':' statement        { $$ = driver.makeLabel(*$1, std::move($3)); }
   | CASE constant_expression ':' statement
-                                   { $$ = ast.makeCase(std::move($2), std::move($4), @1); }
-  | DEFAULT ':' statement          { $$ = ast.makeDefault(std::move($3), @1); }
+                                   { $$ = driver.makeCase(std::move($2), std::move($4)); }
+  | DEFAULT ':' statement          { $$ = driver.makeDefault(std::move($3)); }
   ;
 
 compound_statement
-  : '{' '}'                        { $$ = ast.makeCompoundStmt({}, @1); }
-  | '{' block_item_list '}'        { $$ = ast.makeCompoundStmt(std::move($2), @1); }
+  : '{' '}'                        { $$ = driver.makeCompoundStmt({}); }
+  | '{' block_item_list '}'        { $$ = driver.makeCompoundStmt(std::move($2)); }
   ;
 
 block_item_list
-  : block_item                     { $$ = ast.singleton(std::move($1)); }
+  : block_item                     { $$ = driver.singleton(std::move($1)); }
   | block_item_list block_item     { $1.emplace_back(std::move($2)); $$ = std::move($1); }
   ;
 
 block_item
-  : declaration                    { $$ = std::make_unique<AST::DeclStmt>(/*wrap*/ std::move($1)); /* or emit multiple if decl expands */ }
+  : declaration                    { $$ = std::make_unique<AST::DeclStmt>(std::move($1));}
   | statement                      { $$ = std::move($1); }
   ;
 
 expression_statement
-  : ';'                            { $$ = ast.makeNullStmt(@1); }
-  | expression ';'                 { $$ = ast.makeExprStmt(std::move($1), @1); }
+  : ';'                            { $$ = driver.makeNullStmt(); }
+  | expression ';'                 { $$ = driver.makeExprStmt(std::move($1)); }
   ;
 
 selection_statement
   : IF '(' expression ')' statement ELSE statement
-                                   { $$ = ast.makeIf(std::move($3), std::move($5), std::move($7), @1); }
+                                   { $$ = driver.makeIf(std::move($3), std::move($5), std::move($7)); }
   | IF '(' expression ')' statement
-                                   { $$ = ast.makeIf(std::move($3), std::move($5), nullptr, @1); }
+                                   { $$ = driver.makeIf(std::move($3), std::move($5), nullptr); }
   | SWITCH '(' expression ')' statement
-                                   { $$ = ast.makeSwitch(std::move($3), std::move($5), @1); }
+                                   { $$ = driver.makeSwitch(std::move($3), std::move($5)); }
   ;
 
 iteration_statement
   : WHILE '(' expression ')' statement
-                                   { $$ = ast.makeWhile(std::move($3), std::move($5), @1); }
+                                   { $$ = driver.makeWhile(std::move($3), std::move($5)); }
   | DO statement WHILE '(' expression ')' ';'
-                                   { $$ = ast.makeDoWhile(std::move($2), std::move($5), @1); }
+                                   { $$ = driver.makeDoWhile(std::move($2), std::move($5)); }
   | FOR '(' expression_statement expression_statement ')' statement
-                                   { $$ = ast.makeFor(std::move($3), /*cond from exprstmt*/ nullptr, /*step*/ nullptr, std::move($6), @1); /* refine: pull expr from exprstmt nodes */ }
+                                   { $$ = driver.makeFor(std::move($3), nullptr, nullptr, std::move($6));}
   | FOR '(' expression_statement expression_statement expression ')' statement
-                                   { $$ = ast.makeFor(std::move($3), /*cond*/ nullptr, std::move($5), std::move($7), @1); }
+                                   { $$ = driver.makeFor(std::move($3), nullptr, std::move($5), std::move($7)); }
   | FOR '(' declaration expression_statement ')' statement
-                                   { $$ = ast.makeFor(std::make_unique<AST::DeclStmt>(std::move($3)), /*cond*/ nullptr, /*step*/ nullptr, std::move($6), @1); }
+                                   { $$ = driver.makeFor(std::make_unique<AST::DeclStmt>(std::move($3)), nullptr, nullptr, std::move($6)); }
   | FOR '(' declaration expression_statement expression ')' statement
-                                   { $$ = ast.makeFor(std::make_unique<AST::DeclStmt>(std::move($3)), /*cond*/ nullptr, std::move($5), std::move($7), @1); }
+                                   { $$ = driver.makeFor(std::make_unique<AST::DeclStmt>(std::move($3)), nullptr, std::move($5), std::move($7)); }
   ;
 
 jump_statement
-  /* : GOTO IDENTIFIER ';'            { $$ = ast.makeGoto(*$2, @1); } */
-  | CONTINUE ';'                   { $$ = ast.makeContinue(@1); }
-  | BREAK ';'                      { $$ = ast.makeBreak(@1); }
-  | RETURN ';'                     { $$ = ast.makeReturn(nullptr, @1); }
-  | RETURN expression ';'          { $$ = ast.makeReturn(std::move($2), @1); }
+  /* : GOTO IDENTIFIER ';'            { $$ = driver.makeGoto(*$2, @1); } */
+  | CONTINUE ';'                   { $$ = driver.makeContinue(); }
+  | BREAK ';'                      { $$ = driver.makeBreak(); }
+  | RETURN ';'                     { $$ = driver.makeReturn(nullptr); }
+  | RETURN expression ';'          { $$ = driver.makeReturn(std::move($2)); }
   ;
 
 translation_unit
@@ -694,16 +691,16 @@ function_definition
   : declaration_specifiers declarator declaration_list compound_statement
     {
       // Build AST::FunctionDecl(specs, declarator, body, locals = $3)
-      auto fn = std::make_unique<AST::FunctionDecl>(/* use $1, $2 */);
-      fn->set_body(std::move($4));                 // if your body is a Stmt unique_ptr
-      fn->set_params(std::move($3));               // vector<unique_ptr<ParamDecl>>
-      $$ = std::move(fn);                          // unique_ptr<Decl>
+      auto fn = std::make_unique<AST::FunctionDecl>($1, $2);
+      fn->set_body(std::move($4));
+      fn->set_params(std::move($3));
+      $$ = std::move(fn);
     }
   | declaration_specifiers declarator compound_statement
     {
-      auto fn = std::make_unique<AST::FunctionDecl>(/* use $1, $2 */);
+      auto fn = std::make_unique<AST::FunctionDecl>($1, $2);
       fn->set_body(std::move($3));
-      $$ = std::move(fn);                          // unique_ptr<Decl>
+      $$ = std::move(fn);
     }
   ;
 
