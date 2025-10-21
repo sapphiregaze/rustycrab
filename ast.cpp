@@ -389,7 +389,9 @@ struct Printer : ASTWalker {
   void visit(FunctionDecl &d) override {
     indent();
     os << "Function Declaration:\n";
-    if(d.return_type) d.return_type->accept(*this);
+    if(d.type) d.type->accept(*this);
+    auto& specs = *d.specs;
+    printSpecs(specs);
     os << " " << d.name << "(";
 
     for(size_t i = 0; i < d.params.size(); ++i){

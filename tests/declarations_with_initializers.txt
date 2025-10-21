@@ -2,3 +2,4 @@ int i = 4;
 float f = 3.14, g = 2.71;
 char s = "hello";
 int b = "world";
+double yoink;

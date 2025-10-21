@@ -123,7 +123,7 @@ cAST::Expr* cAST::Driver::makeCast(std::unique_ptr<cAST::TypeNode> type, std::un
   return static_cast<cAST::Expr*>(cast);
 }
 
-cAST::Expr* cAST::Driver::makeCond(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Expr> thenExpr, std::unique_ptr<cAST::Expr> elseExpr) {
+std::unique_ptr<cAST::Expr> cAST::Driver::makeCond(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Expr> thenExpr, std::unique_ptr<cAST::Expr> elseExpr) {
   cAST::ASTNode* parent = head();
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for conditional expression");
@@ -133,7 +133,8 @@ cAST::Expr* cAST::Driver::makeCond(std::unique_ptr<cAST::Expr> cond, std::unique
   condExpr->set_thenExpr(std::move(thenExpr));
   condExpr->set_elseExpr(std::move(elseExpr));
 
-  return static_cast<cAST::Expr*>(condExpr);
+  // return static_cast<cAST::Expr*>(condExpr);
+  return std::unique_ptr<cAST::Expr>(condExpr);
 }
 
 std::unique_ptr<cAST::Decl> cAST::Driver::makeIdentDeclarator(const std::string& name) {
@@ -149,6 +150,25 @@ std::unique_ptr<cAST::Decl> cAST::Driver::makeIdentDeclarator(const std::string&
 
   // return static_cast<cAST::Decl*>(decl);
   return std::unique_ptr<cAST::Decl>(decl);
+}
+
+std::unique_ptr<cAST::Decl> cAST::Driver::makeFunctionDeclarator(std::unique_ptr<cAST::Decl> baseDecl, std::vector<std::unique_ptr<cAST::ParamDecl>> params, bool isVariadic) {
+  cAST::ASTNode* parent = head();
+  assert(parent && "ensure_root failed to provide a parent");
+  if (!parent) throw std::logic_error("No valid parent at head() for function declarator");
+
+  auto* funcDecl = new cAST::FunctionDecl();
+  // Set the base declarator (e.g., the function name)
+  if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(baseDecl.get())) {
+    funcDecl->name = varDecl->name;
+  } else {
+    throw std::logic_error("Base declarator is not a VarDecl for function declarator");
+  }
+  // Set parameters
+  funcDecl->set_params(std::move(params));
+  funcDecl->isVariadic = isVariadic;
+
+  return std::unique_ptr<cAST::Decl>(funcDecl);
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeIdentifierExpr(const std::string& name) {
@@ -226,14 +246,16 @@ cAST::Stmt* cAST::Driver::makeExprStmt(std::unique_ptr<cAST::Expr> expr) {
   return static_cast<cAST::Stmt*>(stmt);
 }
 
-cAST::Stmt* cAST::Driver::makeCompoundStmt(std::vector<std::unique_ptr<cAST::Stmt>> stmts) {
+// $$ = driver.emplaceCompoundStmt( std::vector<std::unique_ptr<cAST::ASTNode>>{} );
+
+cAST::Stmt* cAST::Driver::emplaceCompoundStmt(std::vector<std::unique_ptr<cAST::ASTNode>> stmts) {
   cAST::ASTNode* parent = head();
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for compound statement");
 
   auto* stmt = parent->emplace_child<cAST::CompoundStmt>();
   for (auto& s : stmts) {
-    stmt->addStmt(std::move(s));
+    stmt->addStmtOrExpr(std::move(s));
   }
 
   return static_cast<cAST::Stmt*>(stmt);
@@ -277,20 +299,29 @@ cAST::Decl* cAST::Driver::emplaceDeclListFromSpecsAndInits(cAST::DeclSpecs specs
     if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(decl.get())) {
       varDecl->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
       parent->add_child(std::move(decl));
+    } else if (auto* functionDecl = dynamic_cast<cAST::FunctionDecl*>(decl.get())) {
+      functionDecl->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
+      parent->add_child(std::move(decl));
     } else {
-      throw std::logic_error("Expected VarDecl in initDecls");
+      throw std::logic_error("Expected VarDecl or FuncDecl in initDecls");
     }
   }
 
   return nullptr; // or some appropriate return value
 }
 
+// inits vardecl, errors for functiondecl if init provided
 std::unique_ptr<cAST::Decl> cAST::Driver::makeInitDecl(std::unique_ptr<cAST::Decl> decl, std::unique_ptr<cAST::Expr> init) {
   if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(decl.get())) {
     varDecl->set_init(std::move(init));
     return decl;
+  } else if (auto* functionDecl = dynamic_cast<cAST::FunctionDecl*>(decl.get())) {
+    if (init) {
+      throw std::logic_error("FunctionDecl cannot have an initializer");
+    }
+    return decl;
   } else {
-    throw std::logic_error("Expected VarDecl in makeInitDecl");
+    throw std::logic_error("Expected VarDecl or FuncDecl in makeInitDecl");
   }
 }
 

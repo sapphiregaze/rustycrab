@@ -117,35 +117,19 @@
 %locations
 %%
 primary_expression
-  : IDENTIFIER {
-      std::cout << "Parsed identifier in primary_expression: " << $1 << std::endl;
-      $$ = driver.makeIdentifierExpr($1);
-    }
-  | constant {
-      std::cout << "Parsed constant in primary_expression." << std::endl;
-      $$ = std::move($1);
-    }
-  | string {
-      std::cout << "Parsed string in primary_expression." << std::endl;
-      $$ = std::move($1);
-    }
+  : IDENTIFIER { $$ = driver.makeIdentifierExpr($1); }
+  | constant { $$ = std::move($1); }
+  | string { $$ = std::move($1); }
   /* | '(' expression ')' { $$ = std::move($2); } */
   ;
 
 constant
-  : I_CONSTANT {
-    std::cout << "Parsed integer constant: " << $1 << std::endl;
-    $$ = driver.makeConstantIntExpr($1);
-  }
-  | F_CONSTANT {
-    std::cout << "Parsed floating constant: " << $1 << std::endl;
-    $$ = driver.makeConstantFloatExpr($1);
-  }
+  : I_CONSTANT { $$ = driver.makeConstantIntExpr($1); }
+  | F_CONSTANT { $$ = driver.makeConstantFloatExpr($1); }
   ;
 
 string
   : STRING_LITERAL {
-    std::cout << "Parsed string literal: " << $1 << std::endl;
     $$ = driver.makeStringLiteral($1);
   }
   ;
@@ -250,25 +234,16 @@ logical_or_expression
 
 conditional_expression
   : logical_or_expression { $$ = std::move($1); }
-  /* | logical_or_expression '?' expression ':' conditional_expression { $$ = driver.makeCond(std::move($1), std::move($3), std::move($5)); } */
+  | logical_or_expression '?' expression ':' conditional_expression { $$ = driver.makeCond(std::move($1), std::move($3), std::move($5)); }
   ;
 
 assignment_expression
-  : conditional_expression {
-      std::cout << "Parsed conditional expression in assignment_expression." << std::endl;
-      $$ = std::move($1);
-    }
-  | unary_expression assignment_operator assignment_expression {
-      std::cout << "Parsed assignment expression in assignment_expression." << std::endl;
-      $$ = driver.makeAssign($2, std::move($1), std::move($3));
-    }
+  : conditional_expression { $$ = std::move($1); }
+  | unary_expression assignment_operator assignment_expression { $$ = driver.makeAssign($2, std::move($1), std::move($3)); }
   ;
 
 assignment_operator
-  : '=' {
-      $$ = cAST::AssignOp::Assign;
-      std::cout << "Parsed assignment operator: =" << std::endl;
-    }
+  : '=' { $$ = cAST::AssignOp::Assign; }
   | MUL_ASSIGN { $$ = cAST::AssignOp::Mul; }
   | DIV_ASSIGN { $$ = cAST::AssignOp::Div; }
   | MOD_ASSIGN { $$ = cAST::AssignOp::Mod; }
@@ -287,28 +262,20 @@ expression
 
 declaration
   : declaration_specifiers ';' {
-    std::cout << "Parsed declaration with specs only." << std::endl;
-    // driver.makeDeclStmt(driver.makeDeclFromSpecs($1));
-    driver.emplaceDeclFromSpecs($1);
-  }
+      std::cout << "Parsed declaration with only specifiers." << std::endl;
+      driver.emplaceDeclFromSpecs($1);
+    }
   | declaration_specifiers init_declarator_list ';' {
-    std::cout << "Parsed declaration with specs and initializers." << std::endl;
-    std::cout << "Number of init declarators: " << $2.size() << std::endl;
-    // driver.makeInitDeclList(std::move($1));
-    driver.emplaceDeclListFromSpecsAndInits($1, std::move($2));
-  }
+      std::cout << "Parsed declaration with specifiers and initializers." << std::endl;
+      std::cout << "Number of initializers: " << $2.size() << std::endl;
+      driver.emplaceDeclListFromSpecsAndInits($1, std::move($2));
+    }
   ;
 
 declaration_specifiers
-  : type_specifier {
-    $$ = driver.makeSpecsFromBuiltinType($1);
-  }
-  | type_qualifier {
-    $$ = driver.makeSpecsFromTypeQual($1);
-  }
-  | storage_class_specifier {
-    $$ = driver.makeSpecsFromStorageClass($1);
-  }
+  : type_specifier { $$ = driver.makeSpecsFromBuiltinType($1); }
+  | type_qualifier { $$ = driver.makeSpecsFromTypeQual($1); }
+  | storage_class_specifier { $$ = driver.makeSpecsFromStorageClass($1); }
   /* | declaration_specifiers type_specifier */
   /* | declaration_specifiers type_qualifier */
   /* | declaration_specifiers storage_class_specifier */
@@ -347,8 +314,6 @@ type_qualifier
 
 init_declarator_list
   : init_declarator {
-      // $$ = std::vector<std::unique_ptr<cAST::Decl>>{ std::move($1) };
-      // $$ = std::vector<std::unique_ptr<cAST::Decl>>{};
       $$ = std::vector<std::unique_ptr<cAST::Decl>>{};
       $$.emplace_back(std::move($1));
     }
@@ -359,11 +324,11 @@ init_declarator_list
 
 init_declarator
   : declarator {
-      std::cout << "Parsed only declarator in init_declarator: " << std::endl;
+      std::cout << "Parsed declarator without initializer." << std::endl;
       $$ = driver.makeInitDecl(std::move($1), nullptr);
     }
   | declarator '=' initializer {
-      std::cout << "Parsed initializer in init_declarator: " << std::endl;
+      std::cout << "Parsed initializer for declarator." << std::endl;
       $$ = driver.makeInitDecl(std::move($1), std::move($3));
     }
   ;
@@ -383,7 +348,10 @@ declarator
 direct_declarator
   : IDENTIFIER { $$ = driver.makeIdentDeclarator($1); }
   /* | '(' declarator ')' { $$ = std::move($2); } */
-  /* | direct_declarator '(' ')' { $$ = driver.wrapFunction($1, {}, false); } */
+  | direct_declarator '(' ')' {
+      std::cout << "Parsed function declarator with no parameters." << std::endl;
+      $$ = driver.makeFunctionDeclarator(std::move($1), std::vector<std::unique_ptr<cAST::ParamDecl>>{}, false);
+    }
   /* | direct_declarator '(' parameter_type_list ')' { $$ = driver.wrapFunction($1, std::move($3), {}, @2); } */
   ;
 
@@ -430,15 +398,15 @@ initializer_list
 
 statement
   : compound_statement { $$ = std::move($1); }
-  | expression_statement { $$ = std::move($1); }
-  | selection_statement { $$ = std::move($1); }
-  | iteration_statement { $$ = std::move($1); }
-  | jump_statement { $$ = std::move($1); }
+  /* | expression_statement { $$ = std::move($1); } */
+  /* | selection_statement { $$ = std::move($1); } */
+  /* | iteration_statement { $$ = std::move($1); } */
+  /* | jump_statement { $$ = std::move($1); } */
   ;
 
 compound_statement
-  : '{' '}' { $$ = driver.makeCompoundStmt({}); }
-  | '{' block_item_list '}' { $$ = driver.makeCompoundStmt(std::move($2)); }
+  : '{' '}' { $$ = driver.emplaceCompoundStmt( std::vector<std::unique_ptr<cAST::ASTNode>>{} ); }
+  /* | '{' block_item_list '}' { $$ = driver.makeCompoundStmt(std::move($2)); } */
   ;
 
 block_item_list
@@ -478,16 +446,12 @@ jump_statement
   ;
 
 translation_unit
-	: external_declaration {
-    }
-	| translation_unit external_declaration {
-    }
+	: external_declaration { }
+	| translation_unit external_declaration { }
 	;
 
 external_declaration
-  : declaration {
-      // $$ = std::move($1);
-    }
+  : declaration { }
   /* | function_definition {
     std::cout << "Function definition parsed." << std::endl;
     $$ = std::move($1);

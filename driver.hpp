@@ -45,18 +45,19 @@ public:
   std::unique_ptr<cAST::Expr> makeConstantFloatExpr(float value);
   std::unique_ptr<cAST::Expr> makeAssign(cAST::AssignOp op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right);
   std::unique_ptr<cAST::Expr> makeStringLiteral(const std::string& value);
+  std::unique_ptr<cAST::Expr> makeCond(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Expr> thenExpr, std::unique_ptr<cAST::Expr> elseExpr);
 
   cAST::Expr* makeCast(std::unique_ptr<cAST::TypeNode> type, std::unique_ptr<cAST::Expr> expr);
-  cAST::Expr* makeCond(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Expr> thenExpr, std::unique_ptr<cAST::Expr> elseExpr);
   cAST::Expr* makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer);
   cAST::Expr* makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index);
   cAST::Expr* makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args);
 
   cAST::Stmt* makeExprStmt(std::unique_ptr<cAST::Expr> expr);
-  cAST::Stmt* makeCompoundStmt(std::vector<std::unique_ptr<cAST::Stmt>> stmts);
   cAST::Stmt* makeDeclStmt(std::unique_ptr<cAST::Decl> decl);
   cAST::Stmt* makeNullStmt();
+  cAST::Stmt* emplaceCompoundStmt(std::vector<std::unique_ptr<cAST::ASTNode>> stmts);
 
+  std::unique_ptr<cAST::Decl> makeFunctionDeclarator(std::unique_ptr<cAST::Decl> baseDecl, std::vector<std::unique_ptr<cAST::ParamDecl>> params, bool isVariadic);
   std::unique_ptr<cAST::Decl> makeIdentDeclarator(const std::string& name);
   std::unique_ptr<cAST::Decl> makeInitDecl(std::unique_ptr<cAST::Decl> decl, std::unique_ptr<cAST::Expr> init);
 

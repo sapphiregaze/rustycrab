@@ -439,9 +439,9 @@ struct ExprStmt : public Stmt {
 };
 
 struct CompoundStmt : public Stmt {
-  std::vector<std::unique_ptr<Stmt>> statements;
-  void addStmt(std::unique_ptr<Stmt> stmt) {
-    statements.push_back( std::move(stmt) );
+  std::vector<std::unique_ptr<ASTNode>> statements_and_exprs;
+  void addStmtOrExpr(std::unique_ptr<ASTNode> stmt) {
+    statements_and_exprs.push_back( std::move(stmt) );
   }
   void accept(ASTWalker &v) override;
 };
@@ -527,18 +527,30 @@ struct FieldDecl : public Decl {
 
 struct FunctionDecl : public Decl {
   std::string name;
-  std::unique_ptr<TypeNode> return_type;
+  std::unique_ptr<TypeNode> type;
   std::vector<std::unique_ptr<ParamDecl>> params;
+  std::unique_ptr<DeclSpecs> specs;
+  std::unique_ptr<Stmt> body;
   bool isDefinition{false};
   // indefinite arity;; idk if we implement tthat
   bool isVariadic{false};
-  std::unique_ptr<Stmt> body;
+
+  void set_type(std::unique_ptr<TypeNode> t) {
+    type = std::move(t);
+  }
+
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
+    specs = std::move(s);
+  }
+
   void set_body(std::unique_ptr<Stmt> b) {
     body = std::move(b);
   }
+
   void set_params(std::vector<std::unique_ptr<ParamDecl>> p) {
     params = std::move(p);
   }
+
   void accept(ASTWalker &v) override;
 };
 
