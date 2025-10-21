@@ -35,30 +35,37 @@ public:
   void parse( std::istream &iss );
 
   void ensure_root();
+
   cAST::TypeNode* makeBuiltinType(cAST::BUILTIN_TYPE bt);
-  cAST::Expr* makeBinary(cAST::BINARY_OPERATOR op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right);
-  cAST::Expr* makeUnary(cAST::UNARY_OPERATOR op, std::unique_ptr<cAST::Expr> expr);
-  cAST::Expr* makeIdentifierExpr(const std::string& name);
+
+  std::unique_ptr<cAST::Expr> makeBinary(cAST::BINARY_OPERATOR op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right);
+  std::unique_ptr<cAST::Expr> makeUnary(cAST::UNARY_OPERATOR op, std::unique_ptr<cAST::Expr> expr);
+  std::unique_ptr<cAST::Expr> makeIdentifierExpr(const std::string& name);
+  std::unique_ptr<cAST::Expr> makeConstantIntExpr(int value);
+  std::unique_ptr<cAST::Expr> makeConstantFloatExpr(float value);
+  std::unique_ptr<cAST::Expr> makeAssign(cAST::AssignOp op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right);
+  std::unique_ptr<cAST::Expr> makeStringLiteral(const std::string& value);
+
   cAST::Expr* makeCast(std::unique_ptr<cAST::TypeNode> type, std::unique_ptr<cAST::Expr> expr);
   cAST::Expr* makeCond(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Expr> thenExpr, std::unique_ptr<cAST::Expr> elseExpr);
-  cAST::Expr* makeConstantIntExpr(int value);
-  cAST::Expr* makeConstantFloatExpr(float value);
-  cAST::Expr* makeAssign(cAST::AssignOp op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right);
-  cAST::Expr* makeStringLiteral(const std::string& value);
   cAST::Expr* makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer);
   cAST::Expr* makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index);
   cAST::Expr* makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args);
-  cAST::Stmt* makeNullStmt();
-  cAST::Decl* makeIdentDeclarator(const std::string& name);
+
   cAST::Stmt* makeExprStmt(std::unique_ptr<cAST::Expr> expr);
   cAST::Stmt* makeCompoundStmt(std::vector<std::unique_ptr<cAST::Stmt>> stmts);
+  cAST::Stmt* makeDeclStmt(std::unique_ptr<cAST::Decl> decl);
+  cAST::Stmt* makeNullStmt();
+
+  std::unique_ptr<cAST::Decl> makeIdentDeclarator(const std::string& name);
+  std::unique_ptr<cAST::Decl> makeInitDecl(std::unique_ptr<cAST::Decl> decl, std::unique_ptr<cAST::Expr> init);
+
+  cAST::Decl* emplaceDeclFromSpecs(cAST::DeclSpecs specs);
+  cAST::Decl* emplaceDeclListFromSpecsAndInits(cAST::DeclSpecs specs, std::vector<std::unique_ptr<cAST::Decl>> initDecls);
+
   cAST::DeclSpecs makeSpecsFromBuiltinType(cAST::BUILTIN_TYPE bt);
   cAST::DeclSpecs makeSpecsFromTypeQual(cAST::TYPE_QUALIFIER tq);
   cAST::DeclSpecs makeSpecsFromStorageClass(cAST::TYPE_STORAGE_QUALIFIER sc);
-  cAST::Decl* makeDeclFromSpecs(cAST::DeclSpecs specs);
-  cAST::Decl* makeDeclListFromSpecsAndInits(cAST::DeclSpecs specs, std::vector<cAST::Decl*> initDecls);
-  cAST::Stmt* makeDeclStmt(std::unique_ptr<cAST::Decl> decl);
-
   cAST::DeclSpecs makeSpecsFromTypeNode(std::unique_ptr<cAST::TypeNode> type);
   cAST::DeclSpecs combineSpecs(cAST::DeclSpecs a, cAST::DeclSpecs b);
 

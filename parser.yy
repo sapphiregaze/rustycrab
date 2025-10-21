@@ -63,61 +63,91 @@
 
 %token ALIGNAS ALIGNOF ATOMIC GENERIC NORETURN STATIC_ASSERT THREAD_LOCAL
 
-%type <std::unique_ptr<cAST::Expr>>
-  initializer cast_expression multiplicative_expression additive_expression
-  relational_expression equality_expression and_expression
-  exclusive_or_expression inclusive_or_expression
-  logical_and_expression logical_or_expression shift_expression
-  conditional_expression assignment_expression expression
-
-%type <cAST::Expr*> primary_expression constant string
-
-%type <std::vector<std::unique_ptr<cAST::Expr>>> argument_expression_list initializer_list postfix_expression unary_expression
-
 %type <cAST::UNARY_OPERATOR> unary_operator
 %type <cAST::AssignOp> assignment_operator
 %type <cAST::TYPE_STORAGE_QUALIFIER> storage_class_specifier
 %type <cAST::TYPE_QUALIFIER> type_qualifier
 %type <cAST::BUILTIN_TYPE> type_specifier
 
+%type <std::unique_ptr<cAST::Expr>>
+  initializer expression unary_expression cast_expression
+  logical_and_expression logical_or_expression
+  multiplicative_expression additive_expression relational_expression equality_expression
+  exclusive_or_expression inclusive_or_expression and_expression shift_expression postfix_expression
+  primary_expression constant string assignment_expression conditional_expression
+
+%type <std::vector<std::unique_ptr<cAST::Expr>>>
+  argument_expression_list initializer_list
+
+
 %type <std::unique_ptr<cAST::Stmt>>
   statement compound_statement
   block_item expression_statement selection_statement
   iteration_statement jump_statement
 
-%type <std::vector<std::unique_ptr<cAST::Stmt>>> block_item_list
+%type <std::vector<std::unique_ptr<cAST::Stmt>>>
+  block_item_list
 
-%type <std::unique_ptr<cAST::Decl>> declaration external_declaration function_definition
 
-%type <cAST::DeclSpecs> declaration_specifiers specifier_qualifier_list
+%type <cAST::Decl*>
+  pointer
+
+%type <std::unique_ptr<cAST::Decl>>
+  declaration external_declaration function_definition declarator direct_declarator init_declarator
+
+%type <std::vector<std::unique_ptr<cAST::Decl>>>
+  init_declarator_list;
+
 
 %type <cAST::TypeNode*> type_name
 
-%type <cAST::Decl*> declarator direct_declarator pointer init_declarator
 
-%type <std::vector<cAST::Decl*>> init_declarator_list;
+%type <std::vector<std::unique_ptr<cAST::ParamDecl>>>
+  parameter_list parameter_type_list
 
-%type <std::vector<std::unique_ptr<cAST::ParamDecl>>> parameter_list parameter_type_list
-%type <std::unique_ptr<cAST::ParamDecl>> parameter_declaration
+%type <std::unique_ptr<cAST::ParamDecl>>
+  parameter_declaration
+
+
+%type <cAST::DeclSpecs>
+  declaration_specifiers specifier_qualifier_list
 
 %start translation_unit
 
 %locations
 %%
 primary_expression
-  : IDENTIFIER { $$ = driver.makeIdentifierExpr(*$1); }
-  | constant { $$ = std::move($1); }
-  | string { $$ = std::move($1); }
+  : IDENTIFIER {
+      std::cout << "Parsed identifier in primary_expression: " << $1 << std::endl;
+      $$ = driver.makeIdentifierExpr($1);
+    }
+  | constant {
+      std::cout << "Parsed constant in primary_expression." << std::endl;
+      $$ = std::move($1);
+    }
+  | string {
+      std::cout << "Parsed string in primary_expression." << std::endl;
+      $$ = std::move($1);
+    }
   /* | '(' expression ')' { $$ = std::move($2); } */
   ;
 
 constant
-  : I_CONSTANT { $$ = driver.makeConstantIntExpr(*$1); }
-  | F_CONSTANT { $$ = driver.makeConstantFloatExpr(*$1); }
+  : I_CONSTANT {
+    std::cout << "Parsed integer constant: " << $1 << std::endl;
+    $$ = driver.makeConstantIntExpr($1);
+  }
+  | F_CONSTANT {
+    std::cout << "Parsed floating constant: " << $1 << std::endl;
+    $$ = driver.makeConstantFloatExpr($1);
+  }
   ;
 
 string
-  : STRING_LITERAL { $$ = driver.makeStringLiteral(*$1); }
+  : STRING_LITERAL {
+    std::cout << "Parsed string literal: " << $1 << std::endl;
+    $$ = driver.makeStringLiteral($1);
+  }
   ;
 
 postfix_expression
@@ -156,7 +186,7 @@ unary_operator
   ;
 
 cast_expression
-  : unary_expression { $$ = $1; }
+  : unary_expression { $$ = std::move($1); }
   /* | '(' type_name ')' cast_expression { $$ = driver.makeCast(std::move($2), std::move($4)); } */
   ;
 
@@ -228,19 +258,17 @@ assignment_expression
       std::cout << "Parsed conditional expression in assignment_expression." << std::endl;
       $$ = std::move($1);
     }
-    /* modify to have no recursion for testing */
-  | unary_expression assignment_operator conditional_expression {
+  | unary_expression assignment_operator assignment_expression {
       std::cout << "Parsed assignment expression in assignment_expression." << std::endl;
       $$ = driver.makeAssign($2, std::move($1), std::move($3));
     }
-  /* | unary_expression assignment_operator assignment_expression {
-      std::cout << "Parsed assignment expression in assignment_expression." << std::endl;
-      $$ = driver.makeAssign($2, std::move($1), std::move($3));
-    } */
   ;
 
 assignment_operator
-  : '=' { $$ = cAST::AssignOp::Assign; }
+  : '=' {
+      $$ = cAST::AssignOp::Assign;
+      std::cout << "Parsed assignment operator: =" << std::endl;
+    }
   | MUL_ASSIGN { $$ = cAST::AssignOp::Mul; }
   | DIV_ASSIGN { $$ = cAST::AssignOp::Div; }
   | MOD_ASSIGN { $$ = cAST::AssignOp::Mod; }
@@ -259,12 +287,15 @@ expression
 
 declaration
   : declaration_specifiers ';' {
+    std::cout << "Parsed declaration with specs only." << std::endl;
     // driver.makeDeclStmt(driver.makeDeclFromSpecs($1));
-    driver.makeDeclFromSpecs($1);
+    driver.emplaceDeclFromSpecs($1);
   }
   | declaration_specifiers init_declarator_list ';' {
+    std::cout << "Parsed declaration with specs and initializers." << std::endl;
+    std::cout << "Number of init declarators: " << $2.size() << std::endl;
     // driver.makeInitDeclList(std::move($1));
-    driver.makeDeclListFromSpecsAndInits($1, std::move($2));
+    driver.emplaceDeclListFromSpecsAndInits($1, std::move($2));
   }
   ;
 
@@ -316,14 +347,25 @@ type_qualifier
 
 init_declarator_list
   : init_declarator {
-    $$ = std::vector<cAST::Decl*>{ std::move($1) };
-  }
-  | init_declarator_list ',' init_declarator { $1.emplace_back(std::move($3)); $$ = std::move($1); }
+      // $$ = std::vector<std::unique_ptr<cAST::Decl>>{ std::move($1) };
+      // $$ = std::vector<std::unique_ptr<cAST::Decl>>{};
+      $$ = std::vector<std::unique_ptr<cAST::Decl>>{};
+      $$.emplace_back(std::move($1));
+    }
+  | init_declarator_list ',' init_declarator {
+      $1.emplace_back(std::move($3)); $$ = std::move($1);
+    }
   ;
 
 init_declarator
-  : declarator { $$ = std::move($1); }
-  | declarator '=' initializer
+  : declarator {
+      std::cout << "Parsed only declarator in init_declarator: " << std::endl;
+      $$ = driver.makeInitDecl(std::move($1), nullptr);
+    }
+  | declarator '=' initializer {
+      std::cout << "Parsed initializer in init_declarator: " << std::endl;
+      $$ = driver.makeInitDecl(std::move($1), std::move($3));
+    }
   ;
 
 declarator
