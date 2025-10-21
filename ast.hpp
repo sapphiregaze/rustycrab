@@ -530,7 +530,7 @@ struct FunctionDecl : public Decl {
   std::unique_ptr<TypeNode> type;
   std::vector<std::unique_ptr<ParamDecl>> params;
   std::unique_ptr<DeclSpecs> specs;
-  std::unique_ptr<Stmt> body;
+  std::unique_ptr<ASTNode> body;
   bool isDefinition{false};
   // indefinite arity;; idk if we implement tthat
   bool isVariadic{false};
@@ -543,7 +543,7 @@ struct FunctionDecl : public Decl {
     specs = std::move(s);
   }
 
-  void set_body(std::unique_ptr<Stmt> b) {
+  void set_body(std::unique_ptr<ASTNode> b) {
     body = std::move(b);
   }
 

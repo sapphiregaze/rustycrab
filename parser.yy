@@ -405,7 +405,10 @@ statement
   ;
 
 compound_statement
-  : '{' '}' { $$ = driver.emplaceCompoundStmt( std::vector<std::unique_ptr<cAST::ASTNode>>{} ); }
+  : '{' '}' {
+      std::cout << "Parsed empty compound statement." << std::endl;
+      $$ = driver.makeCompoundStmt( std::vector<std::unique_ptr<cAST::ASTNode>>{} );
+    }
   /* | '{' block_item_list '}' { $$ = driver.makeCompoundStmt(std::move($2)); } */
   ;
 
@@ -416,7 +419,10 @@ block_item_list
 
 block_item
   : declaration { $$ = std::make_unique<cAST::DeclStmt>(std::move($1));}
-  | statement { $$ = std::move($1); }
+  | statement {
+      std::cout << "Parsed statement as block item." << std::endl;
+      $$ = std::move($1);
+    }
   ;
 
 expression_statement
@@ -452,18 +458,16 @@ translation_unit
 
 external_declaration
   : declaration { }
-  /* | function_definition {
-    std::cout << "Function definition parsed." << std::endl;
-    $$ = std::move($1);
-  } */
+  | function_definition {
+      std::cout << "Function definition parsed." << std::endl;
+      $$ = std::move($1);
+    }
   ;
 
 function_definition
-  : declaration_specifiers declarator compound_statement
-    {
-      auto fn = std::make_unique<cAST::FunctionDecl>($1, $2);
-      fn->set_body(std::move($3));
-      $$ = std::move(fn);
+  : declaration_specifiers declarator compound_statement {
+      std::cout << "Parsed function definition." << std::endl;
+      $$ = driver.emplaceFunctionDefinition(std::move($2), std::move($3), std::move($1), false);
     }
   ;
 %%
