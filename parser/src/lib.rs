@@ -111,12 +111,14 @@ macro_rules! extract_identifier {
 // *****************************************************************************
 // ************************************************
 
-fn primary_expression<'tokens, 'src: 'tokens, I>()
+fn primary_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    choice((identifier(), constant(), string(), expression().delimited_by(left_paren(), right_paren())))
+    choice((identifier(), constant(), string(),expr.delimited_by(left_paren(), right_paren())))
 }
 
 fn constant<'tokens, 'src: 'tokens, I>()
@@ -158,19 +160,22 @@ where
 }
 
 // TODO fix all the spans that do not include the extra stuff after
-fn postfix_expression<'tokens, 'src: 'tokens, I>()
+fn postfix_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     // primary expression or compound literal
     let atom = choice((
-        primary_expression(),
+        primary_expression(expr.clone()),
         // compound literals
         left_paren()
-            .ignore_then(type_name())
+            .ignore_then(type_name(expr.clone(), init.clone()))
             .then_ignore(right_paren().then(left_brace()))
-            .then(initializer_list(initializer()))
+            .then(initializer_list(expr.clone(), init.clone()))
             .then_ignore(comma().or_not())
             .then_ignore(right_brace())
             .map(|((type_name, type_name_span), initializers)| {
@@ -187,24 +192,24 @@ where
     // postfix operations that can be applied repeatedly
     let postfix_op = choice((
         // array access
-        expression().delimited_by(left_bracket(), right_bracket()).map(|(index, _index_span)| {
-            Box::new(move |(expr, span): Spanned<Expr>| {
-                (Expr::ArrayAccess { array: Box::new(expr), index: Box::new(index.clone()) }, span)
+       expr.clone().delimited_by(left_bracket(), right_bracket()).map(|(index, _index_span)| {
+            Box::new(move |(array, array_span): Spanned<Expr>| {
+                (Expr::ArrayAccess { array: Box::new(array), index: Box::new(index.clone()) }, array_span)
             }) as Box<dyn Fn(Spanned<Expr>) -> Spanned<Expr>>
         }),
         // function call w/o arguments
         left_paren().ignore_then(right_paren()).map(|_| {
-            Box::new(|(expr, span): Spanned<Expr>| {
-                (Expr::FunctionCall { function: Box::new(expr), args: Vec::new() }, span)
+            Box::new(|(function, function_span): Spanned<Expr>| {
+                (Expr::FunctionCall { function: Box::new(function), args: Vec::new() }, function_span)
             }) as Box<dyn Fn(Spanned<Expr>) -> Spanned<Expr>>
         }),
         // function call w/ arguments
-        argument_expression_list().delimited_by(left_paren(), right_paren()).map(|args| {
-            Box::new(move |(expr, span): Spanned<Expr>| {
+        argument_expression_list(expr.clone(), init.clone()).delimited_by(left_paren(), right_paren()).map(|args| {
+            Box::new(move |(function, span): Spanned<Expr>| {
                 (
                     Expr::FunctionCall {
-                        function: Box::new(expr),
-                        args: args.iter().map(|(expr, _span)| expr.clone()).collect(),
+                        function: Box::new(function),
+                        args: args.iter().map(|(function, _span)| function.clone()).collect(),
                     },
                     span,
                 )
@@ -213,51 +218,55 @@ where
         // member access
         dot().ignore_then(identifier()).map(|(member, _member_span)| {
             let member_name = extract_identifier!(member);
-            Box::new(move |(expr, span): Spanned<Expr>| {
-                (Expr::MemberAccess { object: Box::new(expr), member: member_name.clone() }, span)
+            Box::new(move |(object, span): Spanned<Expr>| {
+                (Expr::MemberAccess { object: Box::new(object), member: member_name.clone() }, span)
             }) as Box<dyn Fn(Spanned<Expr>) -> Spanned<Expr>>
         }),
         // pointer member operation
         ptr_op().ignore_then(identifier()).map(|(member, _member_span)| {
             let member_name = extract_identifier!(member);
-            Box::new(move |(expr, span): Spanned<Expr>| {
-                (Expr::MemberAccess { object: Box::new(expr), member: member_name.clone() }, span)
+            Box::new(move |(object, span): Spanned<Expr>| {
+                (Expr::MemberAccess { object: Box::new(object), member: member_name.clone() }, span)
             }) as Box<dyn Fn(Spanned<Expr>) -> Spanned<Expr>>
         }),
         // increment operation
         inc().map(|_| {
-            Box::new(|(expr, span): Spanned<Expr>| {
-                (Expr::PostfixOp { op: PostfixOperator::Increment, operand: Box::new(expr) }, span)
+            Box::new(|(operand, span): Spanned<Expr>| {
+                (Expr::PostfixOp { op: PostfixOperator::Increment, operand: Box::new(operand) }, span)
             }) as Box<dyn Fn(Spanned<Expr>) -> Spanned<Expr>>
         }),
         // decrement operation
         dec().map(|_| {
-            Box::new(|(expr, span): Spanned<Expr>| {
-                (Expr::PostfixOp { op: PostfixOperator::Decrement, operand: Box::new(expr) }, span)
+            Box::new(|(operand, span): Spanned<Expr>| {
+                (Expr::PostfixOp { op: PostfixOperator::Decrement, operand: Box::new(operand) }, span)
             }) as Box<dyn Fn(Spanned<Expr>) -> Spanned<Expr>>
         }),
     ));
 
     // postfix operations repeated using foldl
-    atom.foldl(postfix_op.repeated(), |expr, op| op(expr))
+    atom.foldl(postfix_op.repeated(), |operand, op| op(operand))
 }
 
-fn argument_expression_list<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Vec<Spanned<Expr>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn argument_expression_list<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Vec<Spanned<Expr>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    assignment_expression().separated_by(comma()).at_least(1).collect()
+    assignment_expression(expr.clone(), init.clone()).separated_by(comma()).at_least(1).collect()
 }
 
-fn unary_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn unary_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|unary| {
         choice((
-            postfix_expression(),
+            postfix_expression(expr.clone(), init.clone()),
             // preincrement
             inc().ignore_then(unary.clone()).map(|(unary, unary_span)| {
                 (Expr::UnaryOp { op: UnaryOperator::PreIncrement, operand: Box::new(unary) }, unary_span)
@@ -267,7 +276,7 @@ where
                 (Expr::UnaryOp { op: UnaryOperator::PreDecrement, operand: Box::new(unary) }, unary_span)
             }),
             // cast expression
-            unary_operator().then(cast_expression()).map(|((unary_op, unary_op_span), (cast, _cast_span))| {
+            unary_operator().then(cast_expression(expr.clone(), init.clone())).map(|((unary_op, unary_op_span), (cast, _cast_span))| {
                 if let Expr::Cast { type_name, expr } = cast {
                     (
                         Expr::UnaryOp {
@@ -300,15 +309,17 @@ where
     }
 }
 
-fn cast_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn cast_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|cast_expr| {
         choice((
-            unary_expression(),
-            left_paren().ignore_then(type_name()).then_ignore(right_paren()).then(cast_expr.clone()).map(
+            unary_expression(expr.clone(), init.clone()),
+            left_paren().ignore_then(type_name(expr.clone(), init.clone())).then_ignore(right_paren()).then(cast_expr.clone()).map(
                 |((type_name, type_name_span), (cast_expr, _cast_expr_span))| {
                     (Expr::Cast { type_name: Box::new(type_name), expr: Box::new(cast_expr) }, type_name_span)
                 },
@@ -317,14 +328,16 @@ where
     })
 }
 
-fn multiplicative_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn multiplicative_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    cast_expression().foldl(
+    cast_expression(expr.clone(), init.clone()).foldl(
         choice((star().to(BinaryOperator::Mul), slash().to(BinaryOperator::Div), percent().to(BinaryOperator::Mod)))
-            .then(cast_expression())
+            .then(cast_expression(expr.clone(), init.clone()))
             .repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
@@ -332,14 +345,16 @@ where
     )
 }
 
-fn additive_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn additive_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    multiplicative_expression().foldl(
+    multiplicative_expression(expr.clone(), init.clone()).foldl(
         choice((plus().to(BinaryOperator::Add), minus().to(BinaryOperator::Sub)))
-            .then(multiplicative_expression())
+            .then(multiplicative_expression(expr.clone(), init.clone()))
             .repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
@@ -347,14 +362,16 @@ where
     )
 }
 
-fn shift_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn shift_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    additive_expression().foldl(
+    additive_expression(expr.clone(), init.clone()).foldl(
         choice((left_op().to(BinaryOperator::ShiftLeft), right_op().to(BinaryOperator::ShiftRight)))
-            .then(additive_expression())
+            .then(additive_expression(expr.clone(), init.clone()))
             .repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
@@ -362,19 +379,21 @@ where
     )
 }
 
-fn relational_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn relational_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    shift_expression().foldl(
+    shift_expression(expr.clone(), init.clone()).foldl(
         choice((
             lt().to(BinaryOperator::LessThan),
             gt().to(BinaryOperator::GreaterThan),
             lte().to(BinaryOperator::LessEqual),
             gte().to(BinaryOperator::GreaterEqual),
         ))
-        .then(shift_expression())
+        .then(shift_expression(expr.clone(), init.clone()))
         .repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
@@ -382,14 +401,16 @@ where
     )
 }
 
-fn equality_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn equality_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    relational_expression().foldl(
+    relational_expression(expr.clone(), init.clone()).foldl(
         choice((eq().to(BinaryOperator::Equal), ne().to(BinaryOperator::NotEqual)))
-            .then(relational_expression())
+            .then(relational_expression(expr.clone(), init.clone()))
             .repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
@@ -397,82 +418,94 @@ where
     )
 }
 
-fn and_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn and_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    equality_expression().foldl(
-        amp().to(BinaryOperator::BitwiseAnd).then(equality_expression()).repeated(),
+    equality_expression(expr.clone(), init.clone()).foldl(
+        amp().to(BinaryOperator::BitwiseAnd).then(equality_expression(expr.clone(), init.clone())).repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
         },
     )
 }
 
-fn exclusive_or_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn exclusive_or_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    and_expression().foldl(
-        caret().to(BinaryOperator::BitwiseXor).then(and_expression()).repeated(),
+    and_expression(expr.clone(), init.clone()).foldl(
+        caret().to(BinaryOperator::BitwiseXor).then(and_expression(expr.clone(), init.clone())).repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
         },
     )
 }
 
-fn inclusive_or_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn inclusive_or_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    exclusive_or_expression().foldl(
-        pipe().to(BinaryOperator::BitwiseOr).then(exclusive_or_expression()).repeated(),
+    exclusive_or_expression(expr.clone(), init.clone()).foldl(
+        pipe().to(BinaryOperator::BitwiseOr).then(exclusive_or_expression(expr.clone(), init.clone())).repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
         },
     )
 }
 
-fn logical_and_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn logical_and_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    inclusive_or_expression().foldl(
-        and_op().to(BinaryOperator::LogicalAnd).then(inclusive_or_expression()).repeated(),
+    inclusive_or_expression(expr.clone(), init.clone()).foldl(
+        and_op().to(BinaryOperator::LogicalAnd).then(inclusive_or_expression(expr.clone(), init.clone())).repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
         },
     )
 }
 
-fn logical_or_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn logical_or_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    logical_and_expression().foldl(
-        or_op().to(BinaryOperator::LogicalOr).then(logical_and_expression()).repeated(),
+    logical_and_expression(expr.clone(), init.clone()).foldl(
+        or_op().to(BinaryOperator::LogicalOr).then(logical_and_expression(expr.clone(), init.clone())).repeated(),
         |(left_expr, left_span), (op, (right_expr, _right_span))| {
             (Expr::BinaryOp { op, left: Box::new(left_expr), right: Box::new(right_expr) }, left_span)
         },
     )
 }
 
-fn conditional_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn conditional_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|cond| {
         choice((
-            logical_or_expression(),
-            logical_or_expression()
+            logical_or_expression(expr.clone(), init.clone()),
+            logical_or_expression(expr.clone(), init.clone())
                 .then_ignore(question())
-                .then(expression())
+                .then(expr)
                 .then_ignore(colon())
                 .then(cond.clone())
                 // NOTE: the names in this map are a bit confusion due to the name of the grammar
@@ -491,15 +524,17 @@ where
     })
 }
 
-fn assignment_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn assignment_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|assign_expr| {
         choice((
-            conditional_expression(),
-            unary_expression().then(assignment_operator()).then(assign_expr.clone()).map(
+            conditional_expression(expr.clone(), init.clone()),
+            unary_expression(expr.clone(), init.clone()).then(assignment_operator()).then(assign_expr.clone()).map(
                 |(((cond_expr, cond_span), (assign_op, _assign_op_span)), (assign_expr, _assign_expr_span))| {
                     (
                         Expr::Assignment { op: assign_op, lvalue: Box::new(cond_expr), rvalue: Box::new(assign_expr) },
@@ -531,31 +566,38 @@ where
     }
 }
 
-fn expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn expression<'tokens, 'src: 'tokens, I>(
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    assignment_expression().separated_by(comma()).at_least(1).collect().map(|list: Vec<Spanned<Expr>>| {
-        (Expr::Sequence(list.clone().into_iter().map(|(expr, _span)| Box::new(expr)).collect()), list.clone()[0].1)
+    recursive(|expr| {
+        assignment_expression(expr.clone(), initializer(expr.clone())).separated_by(comma()).at_least(1).collect().map(|list: Vec<Spanned<Expr>>| {
+            (Expr::Sequence(list.clone().into_iter().map(|(expr, _span)| Box::new(expr)).collect()), list.clone()[0].1)
+        })
     })
 }
 
-fn constant_expression<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn constant_expression<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    conditional_expression()
+    conditional_expression(expr.clone(), init.clone())
 }
 
-fn declaration<'tokens, 'src: 'tokens, I>()
+fn declaration<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Declaration>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     choice((
-        declaration_specifiers().then_ignore(semicolon()).map(|decl_specifier_list| {
+        declaration_specifiers(expr.clone(), init.clone()).then_ignore(semicolon()).map(|decl_specifier_list| {
             (
                 Declaration {
                     specifiers: decl_specifier_list.clone().into_iter().map(|(specifier, _span)| specifier).collect(),
@@ -564,7 +606,7 @@ where
                 decl_specifier_list[0].1,
             )
         }),
-        declaration_specifiers().then(init_declarator_list()).then_ignore(semicolon()).map(
+        declaration_specifiers(expr.clone(), init.clone()).then(init_declarator_list(expr.clone(), init.clone())).then_ignore(semicolon()).map(
             |(decl_specifier_list, declarator_list)| {
                 (
                     Declaration {
@@ -588,7 +630,10 @@ where
     ))
 }
 
-fn declaration_specifiers<'tokens, 'src: 'tokens, I>()
+fn declaration_specifiers<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Vec<Spanned<DeclarationSpecifier>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
@@ -598,7 +643,7 @@ where
     let mapped_type_qualifier =
         type_qualifier().map(|(qualifier, span)| (DeclarationSpecifier::TypeQualifier(qualifier), span));
     let mapped_type_specifier =
-        type_specifier().map(|(specifier, span)| (DeclarationSpecifier::TypeSpecifier(specifier), span));
+        type_specifier(expr.clone(), init.clone()).map(|(specifier, span)| (DeclarationSpecifier::TypeSpecifier(specifier), span));
     let mapped_function_specifier =
         function_specifier().map(|(specifier, span)| (DeclarationSpecifier::FunctionSpecifier(specifier), span));
 
@@ -610,21 +655,25 @@ where
         .collect()
 }
 
-fn init_declarator_list<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Vec<Spanned<InitDeclarator>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn init_declarator_list<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Vec<Spanned<InitDeclarator>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    init_declarator().separated_by(comma()).at_least(1).collect()
+    init_declarator(expr.clone(), init.clone()).separated_by(comma()).at_least(1).collect()
 }
 
-fn init_declarator<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<InitDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn init_declarator<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<InitDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    declarator().map(|(decl, span)| (InitDeclarator { declarator: decl, initializer: Option::None }, span)).or(
-        declarator().then_ignore(eq()).then(initializer()).map(|((decl, decl_span), (init, _init_span))| {
+    declarator(expr.clone(), init.clone()).map(|(decl, span)| (InitDeclarator { declarator: decl, initializer: Option::None }, span)).or(
+        declarator(expr.clone(), init.clone()).then_ignore(eq()).then(init.clone()).map(|((decl, decl_span), (init, _init_span))| {
             (InitDeclarator { declarator: decl, initializer: Some(init) }, decl_span)
         }),
     )
@@ -644,42 +693,46 @@ where
     }
 }
 
-fn type_specifier<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn type_specifier<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    recursive(|type_spec| {
-        choice((
-            select! {
-              Token::Void(extra) => (TypeSpecifier::Void, span_from_extra(extra)),
-              Token::Char(extra) => (TypeSpecifier::Char, span_from_extra(extra)),
-              Token::Short(extra) => (TypeSpecifier::Short, span_from_extra(extra)),
-              Token::Int(extra) => (TypeSpecifier::Int, span_from_extra(extra)),
-              Token::Long(extra) => (TypeSpecifier::Long, span_from_extra(extra)),
-              Token::Float(extra) => (TypeSpecifier::Float, span_from_extra(extra)),
-              Token::Double(extra) => (TypeSpecifier::Double, span_from_extra(extra)),
-              Token::Signed(extra) => (TypeSpecifier::Signed, span_from_extra(extra)),
-              Token::Unsigned(extra) => (TypeSpecifier::Unsigned, span_from_extra(extra)),
-              Token::Bool(extra) => (TypeSpecifier::Bool, span_from_extra(extra)),
-              Token::Complex(extra) => (TypeSpecifier::Complex, span_from_extra(extra)),
-            },
-            struct_or_union_specifier_inner(type_spec.clone()),
-            enum_specifier_inner(type_spec.clone()),
-        ))
-    })
+    choice((
+        select! {
+            Token::Void(extra) => (TypeSpecifier::Void, span_from_extra(extra)),
+            Token::Char(extra) => (TypeSpecifier::Char, span_from_extra(extra)),
+            Token::Short(extra) => (TypeSpecifier::Short, span_from_extra(extra)),
+            Token::Int(extra) => (TypeSpecifier::Int, span_from_extra(extra)),
+            Token::Long(extra) => (TypeSpecifier::Long, span_from_extra(extra)),
+            Token::Float(extra) => (TypeSpecifier::Float, span_from_extra(extra)),
+            Token::Double(extra) => (TypeSpecifier::Double, span_from_extra(extra)),
+            Token::Signed(extra) => (TypeSpecifier::Signed, span_from_extra(extra)),
+            Token::Unsigned(extra) => (TypeSpecifier::Unsigned, span_from_extra(extra)),
+            Token::Bool(extra) => (TypeSpecifier::Bool, span_from_extra(extra)),
+            Token::Complex(extra) => (TypeSpecifier::Complex, span_from_extra(extra)),
+        },
+        // struct_or_union_specifier_inner(expr.clone(), init.clone()),
+        // enum_specifier_inner(expr.clone(), init.clone()),
+    ))
 }
 
-fn struct_or_union_specifier<'tokens, 'src: 'tokens, I>()
+fn struct_or_union_specifier<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    struct_or_union_specifier_inner(type_specifier())
+    struct_or_union_specifier_inner(expr.clone(), init.clone())
 }
 
 fn struct_or_union_specifier_inner<'tokens, 'src: 'tokens, I>(
-    type_spec: impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
 ) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
@@ -687,7 +740,7 @@ where
     choice((
         struct_or_union()
             .then_ignore(left_brace())
-            .then(struct_declaration_list_inner(type_spec.clone()))
+            .then(struct_declaration_list_inner(expr.clone(), init.clone()))
             .then_ignore(right_brace())
             .map(|((kind, kind_span), struct_declaration_list)| {
                 (
@@ -705,7 +758,7 @@ where
         struct_or_union()
             .then(identifier())
             .then_ignore(left_brace())
-            .then(struct_declaration_list_inner(type_spec.clone()))
+            .then(struct_declaration_list_inner(expr.clone(), init.clone()))
             .then_ignore(right_brace())
             .map(|(((kind, kind_span), (identifier, _identifier_span)), struct_declaration_list)| {
                 (
@@ -747,39 +800,47 @@ where
     }
 }
 
-fn struct_declaration_list<'tokens, 'src: 'tokens, I>()
+fn struct_declaration_list<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Vec<Spanned<StructDeclaration>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    struct_declaration_list_inner(type_specifier())
+    struct_declaration_list_inner(expr.clone(), init.clone())
 }
 
 fn struct_declaration_list_inner<'tokens, 'src: 'tokens, I>(
-    type_spec: impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
 ) -> impl Parser<'tokens, I, Vec<Spanned<StructDeclaration>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    struct_declaration_inner(type_spec).repeated().at_least(1).collect()
+    struct_declaration_inner(expr.clone(), init.clone()).repeated().at_least(1).collect()
 }
 
-fn struct_declaration<'tokens, 'src: 'tokens, I>()
+fn struct_declaration<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<StructDeclaration>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    struct_declaration_inner(type_specifier())
+    struct_declaration_inner(expr.clone(), init.clone())
 }
 
 fn struct_declaration_inner<'tokens, 'src: 'tokens, I>(
-    type_spec: impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
 ) -> impl Parser<'tokens, I, Spanned<StructDeclaration>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     choice((
-        specifier_qualifier_list_inner(type_spec.clone()).then_ignore(semicolon()).map(|specifiers| {
+        specifier_qualifier_list_inner(expr.clone(), init.clone()).then_ignore(semicolon()).map(|specifiers| {
             (
                 StructDeclaration {
                     specifiers: specifiers
@@ -795,7 +856,7 @@ where
                 specifiers.clone()[0].1,
             )
         }),
-        specifier_qualifier_list_inner(type_spec.clone()).then(struct_declarator_list()).then_ignore(semicolon()).map(
+        specifier_qualifier_list_inner(expr.clone(), init.clone()).then(struct_declarator_list(expr.clone(), init.clone())).then_ignore(semicolon()).map(
             |(specifiers, declarators)| {
                 (
                     StructDeclaration {
@@ -816,21 +877,24 @@ where
     ))
 }
 
-fn specifier_qualifier_list<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Vec<Spanned<TypeQualOrSpec>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
-where
-    I: ValueInput<'tokens, Token = Token, Span = Span>,
-{
-    specifier_qualifier_list_inner(type_specifier())
-}
-
-fn specifier_qualifier_list_inner<'tokens, 'src: 'tokens, I>(
-    type_spec: impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+fn specifier_qualifier_list<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
 ) -> impl Parser<'tokens, I, Vec<Spanned<TypeQualOrSpec>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    type_spec
+    specifier_qualifier_list_inner(expr.clone(), init.clone())
+}
+
+fn specifier_qualifier_list_inner<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Vec<Spanned<TypeQualOrSpec>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token, Span = Span>,
+{
+    type_specifier(expr.clone(), init.clone())
         .map(|(specifier, span)| (TypeQualOrSpec::Specifier(specifier), span))
         .or(type_qualifier().map(|(qualifier, span)| (TypeQualOrSpec::Qualifier(qualifier), span)))
         .repeated()
@@ -838,20 +902,26 @@ where
         .collect()
 }
 
-fn struct_declarator_list<'tokens, 'src: 'tokens, I>()
+fn struct_declarator_list<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Vec<Spanned<StructDeclarator>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    struct_declarator().separated_by(comma()).at_least(1).collect()
+    struct_declarator(expr.clone(), init.clone()).separated_by(comma()).at_least(1).collect()
 }
 
-fn struct_declarator<'tokens, 'src: 'tokens, I>()
+fn struct_declarator<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<StructDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    declarator().map(|(declarator, declarator_span)| {
+    declarator(expr.clone(), init.clone()).map(|(declarator, declarator_span)| {
         (StructDeclarator { declarator: declarator, bit_field: Option::None }, declarator_span)
     })
 
@@ -872,23 +942,26 @@ where
     //   }),
 }
 
-fn enum_specifier<'tokens, 'src: 'tokens, I>()
+fn enum_specifier<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    enum_specifier_inner(type_specifier())
+    enum_specifier_inner(expr.clone(), init.clone())
 }
 
 fn enum_specifier_inner<'tokens, 'src: 'tokens, I>(
-    type_spec: impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
 ) -> impl Parser<'tokens, I, Spanned<TypeSpecifier>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    let _ = type_spec;
     choice((
-        enum_token().ignore_then(left_brace()).ignore_then(enumerator_list()).then_ignore(right_brace()).map(
+        enum_token().ignore_then(left_brace()).ignore_then(enumerator_list(expr.clone(), init.clone())).then_ignore(right_brace()).map(
             |enumerators| {
                 (
                     TypeSpecifier::Enum(EnumSpecifier {
@@ -904,7 +977,7 @@ where
         enum_token()
             .ignore_then(identifier())
             .then_ignore(left_brace())
-            .then(enumerator_list())
+            .then(enumerator_list(expr.clone(), init.clone()))
             .then_ignore(right_brace())
             .map(|((identifier, span), enumerators)| {
                 (
@@ -929,21 +1002,25 @@ where
     ))
 }
 
-fn enumerator_list<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Vec<Spanned<Enumerator>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn enumerator_list<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Vec<Spanned<Enumerator>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    enumerator().separated_by(comma()).at_least(1).allow_trailing().collect()
+    enumerator(expr.clone(), init.clone()).separated_by(comma()).at_least(1).allow_trailing().collect()
 }
 
-fn enumerator<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Enumerator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn enumerator<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Enumerator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     choice((
-        enumeration_constant().then_ignore(eq()).then(constant_expression()).map(
+        enumeration_constant().then_ignore(eq()).then(constant_expression(expr.clone(), init.clone())).map(
             |((enum_constant, enum_span), (constant_expr, _constant_span))| {
                 (Enumerator { name: extract_identifier!(enum_constant), value: Some(constant_expr) }, enum_span)
             },
@@ -1002,19 +1079,22 @@ where
 
 // }
 
-fn declarator<'tokens, 'src: 'tokens, I>()
+fn declarator<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<Declarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    recursive(|declarator_rec| {
+    recursive(|decl| {
         choice((
-            pointer().then(direct_declarator(declarator_rec.clone())).map(
+            pointer().then(direct_declarator(expr.clone(), init.clone(), decl.clone())).map(
                 |((pointer, pointer_span), (declarator, _declarator_span))| {
                     (Declarator { pointer: Some(pointer), direct_declarator: declarator }, pointer_span)
                 },
             ),
-            direct_declarator(declarator_rec.clone()).map(|(declarator, declarator_span)| {
+            direct_declarator(expr.clone(), init.clone(), decl.clone()).map(|(declarator, declarator_span)| {
                 (Declarator { pointer: Option::None, direct_declarator: declarator }, declarator_span)
             }),
         ))
@@ -1022,7 +1102,9 @@ where
 }
 
 fn direct_declarator<'tokens, 'src: 'tokens, I>(
-    declarator_rec: impl Parser<'tokens, I, Spanned<Declarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    decl: impl Parser<'tokens, I, Spanned<Declarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
 ) -> impl Parser<'tokens, I, Spanned<DirectDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
@@ -1031,7 +1113,7 @@ where
         choice((
             identifier()
                 .map(|(identifier, span)| (DirectDeclarator::Identifier(extract_identifier!(identifier)), span)),
-            declarator_rec
+            decl
                 .clone()
                 .delimited_by(left_paren(), right_paren())
                 .map(|(declarator, span)| (DirectDeclarator::Declarator(Box::new(declarator)), span)),
@@ -1062,7 +1144,7 @@ where
                     static_token().ignore_then(type_qualifier_list()),
                     type_qualifier_list().then_ignore(static_token()),
                 )))
-                .then(assignment_expression())
+                .then(assignment_expression(expr.clone(), init.clone()))
                 .then_ignore(right_bracket())
                 .map(|(((declarator, declarator_span), type_qualifiers), (expr, _expr_span))| {
                     (
@@ -1084,7 +1166,7 @@ where
                 .clone()
                 .then_ignore(left_bracket())
                 .then_ignore(static_token())
-                .then(assignment_expression())
+                .then(assignment_expression(expr.clone(), init.clone()))
                 .then_ignore(right_bracket())
                 .map(|((declarator, declarator_span), (expr, _expr_span))| {
                     (
@@ -1121,7 +1203,7 @@ where
                 .clone()
                 .then_ignore(left_bracket())
                 .then(type_qualifier_list())
-                .then(assignment_expression())
+                .then(assignment_expression(expr.clone(), init.clone()))
                 .then_ignore(right_bracket())
                 .map(|(((declarator, declarator_span), type_qualifiers), (expr, _expr_span))| {
                     (
@@ -1152,7 +1234,7 @@ where
                     )
                 },
             ),
-            direct.clone().then_ignore(left_bracket()).then(assignment_expression()).then_ignore(right_bracket()).map(
+            direct.clone().then_ignore(left_bracket()).then(assignment_expression(expr.clone(), init.clone())).then_ignore(right_bracket()).map(
                 |((declarator, declarator_span), (expr, _expr_span))| {
                     (
                         DirectDeclarator::Array {
@@ -1163,7 +1245,7 @@ where
                     )
                 },
             ),
-            direct.clone().then_ignore(left_paren()).then(parameter_type_list()).then_ignore(right_paren()).map(
+            direct.clone().then_ignore(left_paren()).then(parameter_type_list(expr.clone(), init.clone())).then_ignore(right_paren()).map(
                 |((declarator, declarator_span), (params, _params_span))| {
                     (
                         DirectDeclarator::Function { declarator: Box::new(declarator), params: Some(params.clone()) },
@@ -1227,12 +1309,14 @@ where
     type_qualifier().repeated().at_least(1).collect()
 }
 
-fn parameter_type_list<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<ParameterList>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn parameter_type_list<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<ParameterList>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    parameter_list().then(comma().then(ellipsis()).or_not()).map_with(|(parameters, variadic), e| {
+    parameter_list(expr.clone(), init.clone()).then(comma().then(ellipsis()).or_not()).map_with(|(parameters, variadic), e| {
         (
             ParameterList {
                 params: parameters.clone().into_iter().map(|(parameter, _span)| parameter).collect(),
@@ -1246,21 +1330,26 @@ where
     })
 }
 
-fn parameter_list<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Vec<Spanned<ParameterDeclaration>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn parameter_list<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Vec<Spanned<ParameterDeclaration>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    parameter_declaration().separated_by(comma()).at_least(1).collect()
+    parameter_declaration(expr.clone(), init.clone()).separated_by(comma()).at_least(1).collect()
 }
 
-fn parameter_declaration<'tokens, 'src: 'tokens, I>()
+fn parameter_declaration<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<ParameterDeclaration>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     choice((
-        declaration_specifiers().then(declarator()).map_with(|(specifiers, (declarator, _)), e| {
+        declaration_specifiers(expr.clone(), init.clone()).then(declarator(expr.clone(), init.clone())).map_with(|(specifiers, (declarator, _)), e| {
             (
                 ParameterDeclaration {
                     specifiers: specifiers.into_iter().map(|(spec, _)| spec).collect(),
@@ -1269,7 +1358,7 @@ where
                 e.span(),
             )
         }),
-        declaration_specifiers().then(abstract_declarator()).map_with(|(specifiers, (abs_declarator, _)), e| {
+        declaration_specifiers(expr.clone(), init.clone()).then(abstract_declarator(expr.clone(), init.clone())).map_with(|(specifiers, (abs_declarator, _)), e| {
             (
                 ParameterDeclaration {
                     specifiers: specifiers.into_iter().map(|(spec, _)| spec).collect(),
@@ -1278,7 +1367,7 @@ where
                 e.span(),
             )
         }),
-        declaration_specifiers().map_with(|specifiers, e| {
+        declaration_specifiers(expr.clone(), init.clone()).map_with(|specifiers, e| {
             (
                 ParameterDeclaration {
                     specifiers: specifiers.into_iter().map(|(spec, _)| spec).collect(),
@@ -1298,12 +1387,14 @@ where
     identifier().separated_by(comma()).at_least(1).collect()
 }
 
-fn type_name<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<TypeName>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn type_name<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<TypeName>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    specifier_qualifier_list().then(abstract_declarator().or_not()).map_with(
+    specifier_qualifier_list(expr.clone(), init.clone()).then(abstract_declarator(expr.clone(), init.clone()).or_not()).map_with(
         |(specifiers_qualifiers, declarator_option), e| {
             let specifiers = specifiers_qualifiers
                 .clone()
@@ -1338,12 +1429,15 @@ where
     )
 }
 
-fn abstract_declarator<'tokens, 'src: 'tokens, I>()
+fn abstract_declarator<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+)
 -> impl Parser<'tokens, I, Spanned<AbstractDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    pointer().or_not().then(direct_abstract_declarator().or_not()).map_with(|(pointer_option, declarator_option), e| {
+    pointer().or_not().then(direct_abstract_declarator(expr.clone(), init.clone()).or_not()).map_with(|(pointer_option, declarator_option), e| {
         (
             AbstractDeclarator {
                 pointer: pointer_option.map(|pointer| pointer.0),
@@ -1354,8 +1448,10 @@ where
     })
 }
 
-fn direct_abstract_declarator<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<DirectAbstractDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn direct_abstract_declarator<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<DirectAbstractDeclarator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -1379,7 +1475,7 @@ where
                     static_token().ignore_then(type_qualifier_list().or_not()),
                     type_qualifier_list().or_not().then_ignore(static_token()),
                 ))
-                .then(assignment_expression())
+                .then(assignment_expression(expr.clone(), init.clone()))
                 .map(|(qualifiers_opt, (expr, _))| ArrayDeclaratorType::Static {
                     qualifiers: qualifiers_opt.map_or(Vec::new(), |qs| qs.into_iter().map(|(q, _)| q).collect()),
                     size: Box::new(expr),
@@ -1387,7 +1483,7 @@ where
                 // [ * ]
                 star().to(ArrayDeclaratorType::VariableLength { qualifiers: Vec::new() }),
                 // generic case: [ qualifiers? expr? ]
-                type_qualifier_list().or_not().then(assignment_expression().or_not()).map(
+                type_qualifier_list().or_not().then(assignment_expression(expr.clone(), init.clone()).or_not()).map(
                     |(qualifiers_opt, expr_opt)| {
                         let qualifiers =
                             qualifiers_opt.map_or(Vec::new(), |qs| qs.into_iter().map(|(q, _)| q).collect());
@@ -1405,7 +1501,7 @@ where
             .then_ignore(right_bracket());
 
         // parser for function suffixes
-        let function_suffix = parameter_list().delimited_by(left_paren(), right_paren());
+        let function_suffix = parameter_list(expr.clone(), init.clone()).delimited_by(left_paren(), right_paren());
         let suffix = choice((
             array_suffix
                 .map_with(|array_type, e| (DirectAbstractDeclarator::Array { declarator: None, array_type }, e.span())),
@@ -1441,28 +1537,30 @@ where
     })
 }
 
-fn initializer<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn initializer<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     recursive(|initializer| {
         choice((
-            initializer_list(initializer.clone()).map_with(|list, e| {
+            initializer_list(expr.clone(), initializer.clone()).map_with(|list, e| {
                 (Initializer::List(list.clone().into_iter().map(|(item, _span)| item).collect()), e.span())
             }),
-            assignment_expression().map_with(|(expr, _expr_span), e| (Initializer::Expr(expr), e.span())),
+            assignment_expression(expression(), initializer).map_with(|(expr, _expr_span), e| (Initializer::Expr(expr), e.span())),
         ))
     })
 }
 
 fn initializer_list<'tokens, 'src: 'tokens, I>(
-    initializer: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
 ) -> impl Parser<'tokens, I, Vec<Spanned<InitializerListItem>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    designation().or_not().then(initializer).separated_by(comma()).allow_trailing().at_least(1).collect().map(
+    designation(expr.clone(), init.clone()).or_not().then(init.clone()).separated_by(comma()).allow_trailing().at_least(1).collect().map(
         |list: Vec<(Option<(Designation, SimpleSpan)>, (Initializer, SimpleSpan))>| {
             list.clone()
                 .into_iter()
@@ -1483,12 +1581,14 @@ where
     )
 }
 
-fn designation<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Designation>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn designation<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Designation>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    designator_list().then_ignore(eq()).map_with(|list, e| {
+    designator_list(expr.clone(), init.clone()).then_ignore(eq()).map_with(|list, e| {
         (
             Designation { designators: list.clone().into_iter().map(|(designator, _span)| designator).collect() },
             e.span(),
@@ -1496,21 +1596,25 @@ where
     })
 }
 
-fn designator_list<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Vec<Spanned<Designator>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn designator_list<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Vec<Spanned<Designator>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    designator().repeated().at_least(1).collect()
+    designator(expr.clone(), init.clone()).repeated().at_least(1).collect()
 }
 
-fn designator<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Designator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn designator<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
+) -> impl Parser<'tokens, I, Spanned<Designator>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     choice((
-        constant_expression()
+        constant_expression(expr.clone(), init.clone())
             .delimited_by(left_bracket(), right_bracket())
             .map_with(|(expr, _span), e| (Designator::Index(expr), e.span())),
         dot()
@@ -1528,24 +1632,28 @@ where
 
 // }
 
-fn statement<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn statement<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     recursive(|statement| {
         choice((
-            labeled_statement(statement.clone()),
-            compound_statement(),
-            expression_statement(),
-            selection_statement(statement.clone()),
-            iteration_statement(statement.clone()),
-            jump_statement(),
+            labeled_statement(expr.clone(), init.clone(), statement.clone()),
+            compound_statement(expr.clone(), init.clone()),
+            expression_statement(expr.clone()),
+            selection_statement(expr.clone(), statement.clone()),
+            iteration_statement(expr.clone(), init.clone(), statement.clone()),
+            jump_statement(expr.clone()),
         ))
     })
 }
 
 fn labeled_statement<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
     statement: impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone,
 ) -> impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -1557,7 +1665,7 @@ where
                 (Stmt::Labeled { label: extract_identifier!(identifier), stmt: Box::new(stmt) }, e.span())
             },
         ),
-        case_token().ignore_then(constant_expression()).then_ignore(colon()).then(statement.clone()).map_with(
+        case_token().ignore_then(constant_expression(expr.clone(), init.clone())).then_ignore(colon()).then(statement.clone()).map_with(
             |((constant, _constant_span), (stmt, _stmt_span)), e| {
                 (Stmt::Case { expr: constant, stmt: Box::new(stmt) }, e.span())
             },
@@ -1569,12 +1677,15 @@ where
     ))
 }
 
-fn compound_statement<'tokens, 'src: 'tokens, I>()
+fn compound_statement<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+)
 -> impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    block_item_list().or_not().delimited_by(left_brace(), right_brace()).map_with(|list_option, e| {
+    block_item_list(expr.clone(), init.clone()).or_not().delimited_by(left_brace(), right_brace()).map_with(|list_option, e| {
         (
             Stmt::Compound(CompoundStmt {
                 items: match list_option {
@@ -1587,37 +1698,45 @@ where
     })
 }
 
-fn block_item_list<'tokens, 'src: 'tokens, I>()
+fn block_item_list<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+)
 -> impl Parser<'tokens, I, Vec<Spanned<BlockItem>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    block_item().repeated().at_least(1).collect()
+    block_item(expr.clone(), init.clone()).repeated().at_least(1).collect()
 }
 
-fn block_item<'tokens, 'src: 'tokens, I>()
+fn block_item<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+)
 -> impl Parser<'tokens, I, Spanned<BlockItem>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     choice((
-        declaration().map_with(|(declaration, _declaration_span), e| (BlockItem::Decl(declaration), e.span())),
-        statement().map_with(|(statement, _statement_span), e| (BlockItem::Stmt(statement), e.span())),
+        declaration(expr.clone(), init.clone()).map_with(|(declaration, _declaration_span), e| (BlockItem::Decl(declaration), e.span())),
+        statement(expr.clone(), init.clone()).map_with(|(statement, _statement_span), e| (BlockItem::Stmt(statement), e.span())),
     ))
 }
 
-fn expression_statement<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn expression_statement<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone,
+) -> impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    expression()
+   expr.clone()
         .or_not()
         .then_ignore(semicolon())
         .map_with(|expr_option, e| (Stmt::Expr(expr_option.map(|expr| expr.0)), e.span()))
 }
 
 fn selection_statement<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone,
     statement: impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone,
 ) -> impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -1625,7 +1744,7 @@ where
 {
     choice((
         if_token()
-            .ignore_then(expression().delimited_by(left_paren(), right_paren()))
+            .ignore_then(expr.clone().delimited_by(left_paren(), right_paren()))
             .then(statement.clone())
             .then(else_token().ignore_then(statement.clone()).or_not())
             .map_with(|(((expr, _expr_span), (then_stmt, _then_stmt_span)), else_option), e| {
@@ -1642,7 +1761,7 @@ where
                 )
             }),
         switch_token()
-            .ignore_then(expression().delimited_by(left_paren(), right_paren()))
+            .ignore_then(expr.clone().delimited_by(left_paren(), right_paren()))
             .then(statement.clone())
             .map_with(|((expr, _expr_span), (stmt, _stmt_span)), e| {
                 (Stmt::Switch { condition: expr, body: Box::new(stmt) }, e.span())
@@ -1651,6 +1770,8 @@ where
 }
 
 fn iteration_statement<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
     statement: impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone,
 ) -> impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
@@ -1658,7 +1779,7 @@ where
 {
     choice((
         while_token()
-            .ignore_then(expression().delimited_by(left_paren(), right_paren()))
+            .ignore_then(expr.clone().delimited_by(left_paren(), right_paren()))
             .then(statement.clone())
             .map_with(|((expr, _expr_span), (stmt, _stmt_span)), e| {
                 (Stmt::While { condition: expr, body: Box::new(stmt) }, e.span())
@@ -1666,13 +1787,13 @@ where
         do_token()
             .ignore_then(statement.clone())
             .then_ignore(while_token())
-            .then(expression().delimited_by(left_paren(), right_paren()))
+            .then(expr.clone().delimited_by(left_paren(), right_paren()))
             .then_ignore(semicolon())
             .map_with(|((stmt, _stmt_span), (expr, _expr_span)), e| {
                 (Stmt::DoWhile { body: Box::new(stmt), condition: expr }, e.span())
             }),
         for_token()
-            .ignore_then(expression_statement().then(expression_statement()).then(expression().or_not()))
+            .ignore_then(expression_statement(expr.clone()).then(expression_statement(expr.clone())).then(expr.clone().or_not()))
             .delimited_by(left_paren(), right_paren())
             .then(statement.clone())
             .map_with(
@@ -1699,7 +1820,7 @@ where
                 },
             ),
         for_token()
-            .ignore_then(declaration().then(expression_statement()).then(expression().or_not()))
+            .ignore_then(declaration(expr.clone(), init.clone()).then(expression_statement(expr.clone())).then(expr.clone().or_not()))
             .delimited_by(left_paren(), right_paren())
             .then(statement.clone())
             .map_with(
@@ -1725,8 +1846,9 @@ where
     ))
 }
 
-fn jump_statement<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn jump_statement<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone,
+) -> impl Parser<'tokens, I, Spanned<Stmt>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
@@ -1738,7 +1860,7 @@ where
         continue_token().then(semicolon()).ignored().map_with(|_, e| (Stmt::Continue, e.span())),
         break_token().then(semicolon()).ignored().map_with(|_, e| (Stmt::Break, e.span())),
         return_token()
-            .ignore_then(expression().or_not())
+            .ignore_then(expr.clone().or_not())
             .then_ignore(semicolon())
             .map_with(|expr_option, e| (Stmt::Return(expr_option.map(|expr| expr.0)), e.span())),
     ))
@@ -1751,26 +1873,30 @@ fn translation_unit<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    external_declaration().repeated().at_least(1).collect()
+    external_declaration(expression(), initializer(expression())).repeated().at_least(1).collect()
 }
 
-fn external_declaration<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<ExternalDecl>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn external_declaration<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Spanned<ExternalDecl>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     choice((
-        function_definition().map_with(|(definition, _span), e| (ExternalDecl::FuncDef(definition), e.span())),
-        declaration().map_with(|(declaration, _span), e| (ExternalDecl::Decl(declaration), e.span())),
+        function_definition(expr.clone(), init.clone()).map_with(|(definition, _span), e| (ExternalDecl::FuncDef(definition), e.span())),
+        declaration(expr.clone(), init.clone()).map_with(|(declaration, _span), e| (ExternalDecl::Decl(declaration), e.span())),
     ))
 }
 
-fn function_definition<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<FunctionDefinition>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
+fn function_definition<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+) -> impl Parser<'tokens, I, Spanned<FunctionDefinition>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    declaration_specifiers().then(declarator()).then(declaration_list().or_not()).then(compound_statement()).map_with(
+    declaration_specifiers(expr.clone(), init.clone()).then(declarator(expr.clone(), init.clone())).then(declaration_list(expr.clone(), init.clone()).or_not()).then(compound_statement(expr.clone(), init.clone())).map_with(
         |(((specifiers, (declarator, _declarator_span)), declarations_option), (compound, _compound_span)), e| {
             (
                 FunctionDefinition {
@@ -1793,12 +1919,15 @@ where
     )
 }
 
-fn declaration_list<'tokens, 'src: 'tokens, I>()
+fn declaration_list<'tokens, 'src: 'tokens, I>(
+    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+    init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
+)
 -> impl Parser<'tokens, I, Vec<Spanned<Declaration>>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    declaration().repeated().at_least(1).collect()
+    declaration(expr.clone(), init.clone()).repeated().at_least(1).collect()
 }
 
 fn span_from_extra(extra: Extras) -> Span {
