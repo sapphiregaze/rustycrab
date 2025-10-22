@@ -44,6 +44,8 @@
         help2man
         automake
         m4
+        flex
+        bison
 
         # Development time dependencies
         gtest

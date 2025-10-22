@@ -59,7 +59,7 @@ public:
   std::unique_ptr<cAST::Stmt> makeCompoundStmt(std::vector<std::unique_ptr<cAST::ASTNode>> stmts);
 
   std::unique_ptr<cAST::Decl> makeFunctionDeclarator( std::unique_ptr<cAST::Decl> baseDecl, std::vector<std::unique_ptr<cAST::ParamDecl>> params, bool isVariadic);
-  std::unique_ptr<cAST::Decl> emplaceFunctionDefinition(
+  cAST::Decl* emplaceFunctionDefinition(
     std::unique_ptr<cAST::Decl> baseDecl,
     std::unique_ptr<cAST::Stmt> body,
     DeclSpecs specs,

@@ -174,7 +174,7 @@ std::unique_ptr<cAST::Decl> cAST::Driver::makeFunctionDeclarator(
   return std::unique_ptr<cAST::Decl>(funcDecl);
 }
 
-std::unique_ptr<cAST::Decl> cAST::Driver::emplaceFunctionDefinition(
+cAST::Decl* cAST::Driver::emplaceFunctionDefinition(
   std::unique_ptr<cAST::Decl> baseDecl,
   std::unique_ptr<cAST::Stmt> body,
   DeclSpecs specs,
@@ -184,19 +184,26 @@ std::unique_ptr<cAST::Decl> cAST::Driver::emplaceFunctionDefinition(
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for function definition");
 
-  auto* funcDecl = new cAST::FunctionDecl();
-  // Set the base declarator (e.g., the function name)
-  if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(baseDecl.get())) {
-    funcDecl->name = varDecl->name;
-  } else {
-    throw std::logic_error("Base declarator is not a VarDecl for function definition");
-  }
-  // funcDecl->set_params(std::move(params));
-  funcDecl->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
-  funcDecl->set_body(std::move(body));
-  funcDecl->isVariadic = isVariadic;
+  auto* funcDecl = parent->emplace_child<cAST::FunctionDecl>();
 
-  return std::unique_ptr<cAST::Decl>(funcDecl);
+  if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(baseDecl.get())) {
+    std::cout << "Function name from VarDecl: " << varDecl->name << std::endl;
+    funcDecl->name = varDecl->name;
+  } else if (auto* prevFnDecl = dynamic_cast<cAST::FunctionDecl*>(baseDecl.get())) {
+    std::cout << "Previous function declaration found: " << prevFnDecl->name << std::endl;
+    funcDecl->name = prevFnDecl->name;
+    funcDecl->set_params(std::move(prevFnDecl->params));
+  } else {
+    throw std::logic_error("Base declarator is not a VarDecl or FunctionDecl for function definition");
+  }
+
+  // funcDecl->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
+  funcDecl->set_specs(specs);
+  funcDecl->set_body(std::move(body));
+  // funcDecl->isVariadic = isVariadic;
+
+  // return std::unique_ptr<cAST::Decl>(funcDecl);
+  return static_cast<cAST::Decl*>(funcDecl);
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeIdentifierExpr(const std::string& name) {
@@ -279,12 +286,18 @@ std::unique_ptr<cAST::Stmt> cAST::Driver::makeCompoundStmt(std::vector<std::uniq
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for compound statement");
 
-  auto* stmt = parent->emplace_child<cAST::CompoundStmt>();
+  auto* compoundStmt = new cAST::CompoundStmt();
   for (auto& s : stmts) {
-    stmt->addStmtOrExpr(std::move(s));
+    compoundStmt->addStmtOrExpr(std::move(s));
   }
 
-  return std::unique_ptr<cAST::Stmt>(stmt);
+  // auto* stmt = parent->emplace_child<cAST::CompoundStmt>();
+  // for (auto& s : stmts) {
+  //   stmt->addStmtOrExpr(std::move(s));
+  // }
+
+  // return std::unique_ptr<cAST::Stmt>(stmt);
+  return std::unique_ptr<cAST::Stmt>(compoundStmt);
 }
 
 cAST::DeclSpecs cAST::Driver::makeSpecsFromBuiltinType(cAST::BUILTIN_TYPE bt) {
@@ -326,14 +339,15 @@ cAST::Decl* cAST::Driver::emplaceDeclListFromSpecsAndInits(cAST::DeclSpecs specs
       varDecl->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
       parent->add_child(std::move(decl));
     } else if (auto* functionDecl = dynamic_cast<cAST::FunctionDecl*>(decl.get())) {
-      functionDecl->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
+      functionDecl->set_specs(specs);
       parent->add_child(std::move(decl));
     } else {
       throw std::logic_error("Expected VarDecl or FuncDecl in initDecls");
     }
   }
 
-  return nullptr; // or some appropriate return value
+  // return static_cast<cAST::Decl*>(parent);
+  return nullptr;
 }
 
 // inits vardecl, errors for functiondecl if init provided

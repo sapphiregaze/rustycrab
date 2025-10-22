@@ -390,8 +390,8 @@ struct Printer : ASTWalker {
     indent();
     os << "Function Declaration:\n";
     if(d.type) d.type->accept(*this);
-    auto& specs = *d.specs;
-    printSpecs(specs);
+    // auto& specs = *d.specs;
+    printSpecs(d.specs);
     os << " " << d.name << "(";
 
     for(size_t i = 0; i < d.params.size(); ++i){
@@ -409,11 +409,28 @@ struct Printer : ASTWalker {
 
     os << ") ";
 
-    if(d.isDefinition && d.body){
+    if(d.body){
+      std::cout << "\nFunction Body:\n";
       d.body->accept(*this);
     } else {
       os << ";\n";
     }
+  }
+
+  void visit (CompoundStmt &s) override {
+    indent();
+    os << "Compound Statement:\n";
+    indent();
+    os << "{\n";
+    setIndentLevel(indentLevel + 2);
+    for(const auto& child : s.getChildren()){
+      if(child){
+        child->accept(*this);
+      }
+    }
+    setIndentLevel(indentLevel - 2);
+    indent();
+    os << "}\n";
   }
 
   void visit(DeclStmt &s) override {

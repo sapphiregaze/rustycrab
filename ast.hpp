@@ -439,9 +439,12 @@ struct ExprStmt : public Stmt {
 };
 
 struct CompoundStmt : public Stmt {
-  std::vector<std::unique_ptr<ASTNode>> statements_and_exprs;
+  std::vector<std::unique_ptr<ASTNode>> children;
   void addStmtOrExpr(std::unique_ptr<ASTNode> stmt) {
-    statements_and_exprs.push_back( std::move(stmt) );
+    children.push_back( std::move(stmt) );
+  }
+  std::vector<std::unique_ptr<ASTNode>>& getChildren() {
+    return children;
   }
   void accept(ASTWalker &v) override;
 };
@@ -529,9 +532,8 @@ struct FunctionDecl : public Decl {
   std::string name;
   std::unique_ptr<TypeNode> type;
   std::vector<std::unique_ptr<ParamDecl>> params;
-  std::unique_ptr<DeclSpecs> specs;
+  DeclSpecs specs;
   std::unique_ptr<ASTNode> body;
-  bool isDefinition{false};
   // indefinite arity;; idk if we implement tthat
   bool isVariadic{false};
 
@@ -539,8 +541,8 @@ struct FunctionDecl : public Decl {
     type = std::move(t);
   }
 
-  void set_specs(std::unique_ptr<DeclSpecs> s) {
-    specs = std::move(s);
+  void set_specs(DeclSpecs s) {
+    specs = s;
   }
 
   void set_body(std::unique_ptr<ASTNode> b) {

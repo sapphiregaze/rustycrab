@@ -90,10 +90,10 @@
 
 
 %type <cAST::Decl*>
-  pointer
+  pointer function_definition
 
 %type <std::unique_ptr<cAST::Decl>>
-  declaration external_declaration function_definition declarator direct_declarator init_declarator
+  declaration external_declaration declarator direct_declarator init_declarator
 
 %type <std::vector<std::unique_ptr<cAST::Decl>>>
   init_declarator_list;
@@ -273,7 +273,10 @@ declaration
   ;
 
 declaration_specifiers
-  : type_specifier { $$ = driver.makeSpecsFromBuiltinType($1); }
+  : type_specifier {
+      std::cout << "Parsed type specifier in declaration specifiers." << std::endl;
+      $$ = driver.makeSpecsFromBuiltinType($1);
+    }
   | type_qualifier { $$ = driver.makeSpecsFromTypeQual($1); }
   | storage_class_specifier { $$ = driver.makeSpecsFromStorageClass($1); }
   /* | declaration_specifiers type_specifier */
@@ -397,7 +400,10 @@ initializer_list
   ;
 
 statement
-  : compound_statement { $$ = std::move($1); }
+  : compound_statement {
+      std::cout << "Parsed compound statement as statement." << std::endl;
+      $$ = std::move($1);
+    }
   /* | expression_statement { $$ = std::move($1); } */
   /* | selection_statement { $$ = std::move($1); } */
   /* | iteration_statement { $$ = std::move($1); } */
@@ -460,13 +466,14 @@ external_declaration
   : declaration { }
   | function_definition {
       std::cout << "Function definition parsed." << std::endl;
-      $$ = std::move($1);
+      // $$ = std::move($1);
     }
   ;
 
 function_definition
   : declaration_specifiers declarator compound_statement {
       std::cout << "Parsed function definition." << std::endl;
+      std::cout << "Declarator name: " << static_cast<cAST::VarDecl*>($2.get())->name << std::endl;
       $$ = driver.emplaceFunctionDefinition(std::move($2), std::move($3), std::move($1), false);
     }
   ;
