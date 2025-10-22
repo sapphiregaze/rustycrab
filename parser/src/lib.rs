@@ -531,10 +531,10 @@ fn assignment_expression<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|assign_expr| {
+    recursive::<_, _, extra::Err<Rich<'tokens, Token, Span>>, _, _>(|assign| {
         choice((
             conditional_expression(expr.clone(), init.clone()),
-            unary_expression(expr.clone(), init.clone()).then(assignment_operator()).then(assign_expr.clone()).map(
+            unary_expression(expr.clone(), init.clone()).then(assignment_operator()).then(assign.clone()).map(
                 |(((cond_expr, cond_span), (assign_op, _assign_op_span)), (assign_expr, _assign_expr_span))| {
                     (
                         Expr::Assignment { op: assign_op, lvalue: Box::new(cond_expr), rvalue: Box::new(assign_expr) },

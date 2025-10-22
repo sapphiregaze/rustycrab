@@ -53,6 +53,5 @@ fn main() {
     let input: Vec<Token> = tokens.iter().map(|result| result.clone().unwrap()).collect();
 
     let result = parser().parse(input.as_slice());
-
     println!("{:?}", result);
 }
