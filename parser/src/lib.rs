@@ -111,6 +111,8 @@ macro_rules! extract_identifier {
 // *****************************************************************************
 // ************************************************
 
+static expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone = Recursive::declare();
+
 fn primary_expression<'tokens, 'src: 'tokens, I>(
     expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens
 )
@@ -1873,19 +1875,25 @@ fn translation_unit<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
-    external_declaration(expression(), initializer(expression())).repeated().at_least(1).collect()
+    // define expr recursive parser
+    expr.define(
+        assignment_expression(expr.clone(), initializer(expr.clone())).separated_by(comma()).at_least(1).collect().map(|list: Vec<Spanned<Expr>>| {
+            (Expr::Sequence(list.clone().into_iter().map(|(expr_item, _span)| Box::new(expr_item)).collect()), list.clone()[0].1)
+        })
+    );
+
+    external_declaration(initializer(expr)).repeated().at_least(1).collect()
 }
 
 fn external_declaration<'tokens, 'src: 'tokens, I>(
-    expr: impl Parser<'tokens, I, Spanned<Expr>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
     init: impl Parser<'tokens, I, Spanned<Initializer>, extra::Err<Rich<'tokens, Token, Span>>> + Clone + 'tokens,
 ) -> impl Parser<'tokens, I, Spanned<ExternalDecl>, extra::Err<Rich<'tokens, Token, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token, Span = Span>,
 {
     choice((
-        function_definition(expr.clone(), init.clone()).map_with(|(definition, _span), e| (ExternalDecl::FuncDef(definition), e.span())),
-        declaration(expr.clone(), init.clone()).map_with(|(declaration, _span), e| (ExternalDecl::Decl(declaration), e.span())),
+        function_definition(expr, init.clone()).map_with(|(definition, _span), e| (ExternalDecl::FuncDef(definition), e.span())),
+        declaration(expr, init.clone()).map_with(|(declaration, _span), e| (ExternalDecl::Decl(declaration), e.span())),
     ))
 }
 
