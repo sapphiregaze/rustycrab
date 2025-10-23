@@ -138,17 +138,22 @@ postfix_expression
   : primary_expression { $$ = std::move($1); }
   /* | postfix_expression '[' expression ']' { $$ = driver.makeSubscript(std::move($1), std::move($3)); } */
   /* | postfix_expression '(' ')' { $$ = driver.makeCall(std::move($1), {}); } */
-  /* | postfix_expression '(' argument_expression_list ')' { $$ = driver.makeCall(std::move($1), std::move($3)); } */
+  | postfix_expression '(' argument_expression_list ')' { $$ = driver.makeCall(std::move($1), std::move($3)); }
   /* | postfix_expression '.' IDENTIFIER { $$ = driver.makeMember(std::move($1), *$3, false); } */
   /* | postfix_expression PTR_OP IDENTIFIER { $$ = driver.makeMember(std::move($1), *$3, true); } */
   /* | postfix_expression INC_OP { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::POST_INC, std::move($1)); } */
   /* | postfix_expression DEC_OP { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::POST_DEC, std::move($1)); } */
   ;
 
-/* argument_expression_list
-  : assignment_expression { $$ = driver.singleton(std::move($1)); }
-  | argument_expression_list ',' assignment_expression { $1.emplace_back(std::move($3)); $$ = std::move($1); }
-  ; */
+argument_expression_list
+  : assignment_expression {
+      $$ = std::vector<std::unique_ptr<cAST::Expr>>{};
+      $$.emplace_back(std::move($1));
+    }
+  | argument_expression_list ',' assignment_expression {
+      $1.emplace_back(std::move($3)); $$ = std::move($1);
+    }
+  ;
 
 unary_expression
   : postfix_expression { $$ = std::move($1); }
@@ -355,7 +360,7 @@ direct_declarator
       std::cout << "Parsed function declarator with no parameters." << std::endl;
       $$ = driver.makeFunctionDeclarator(std::move($1), std::vector<std::unique_ptr<cAST::ParamDecl>>{}, false);
     }
-  /* | direct_declarator '(' parameter_type_list ')' { $$ = driver.wrapFunction($1, std::move($3), {}, @2); } */
+  | direct_declarator '(' parameter_type_list ')' { $$ = driver.makeFunctionDeclarator(std::move($1), std::move($3), false /* no variadic */ ); }
   ;
 
 parameter_type_list
@@ -363,13 +368,16 @@ parameter_type_list
   ;
 
 parameter_list
-  : parameter_declaration { $$ = std::vector{ std::move($1) }; }
+  : parameter_declaration {
+      $$ = std::vector<std::unique_ptr<cAST::ParamDecl>>{};
+      $$.emplace_back(std::move($1));
+    }
   | parameter_list ',' parameter_declaration { $1.emplace_back(std::move($3)); $$ = std::move($1); }
   ;
 
 parameter_declaration
-  : declaration_specifiers declarator { $$ = driver.makeParam($1, $2); }
-  | declaration_specifiers { $$ = driver.makeParam($1, cAST::ParamDecl{}); }
+  : declaration_specifiers declarator { $$ = driver.makeParam($1, std::move($2)); }
+  | declaration_specifiers { $$ = driver.makeParam($1, nullptr); }
   ;
 
 type_name
@@ -404,10 +412,10 @@ statement
       std::cout << "Parsed compound statement as statement." << std::endl;
       $$ = std::move($1);
     }
-  /* | expression_statement { $$ = std::move($1); } */
+  | expression_statement { $$ = std::move($1); }
   /* | selection_statement { $$ = std::move($1); } */
   /* | iteration_statement { $$ = std::move($1); } */
-  /* | jump_statement { $$ = std::move($1); } */
+  | jump_statement { $$ = std::move($1); }
   ;
 
 compound_statement

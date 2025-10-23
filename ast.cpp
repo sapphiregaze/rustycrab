@@ -32,8 +32,8 @@ void IfStmt::accept(ASTWalker &v){ v.visit(*this); }
 void WhileStmt::accept(ASTWalker &v){ v.visit(*this); }
 void DoWhileStmt::accept(ASTWalker &v){ v.visit(*this); }
 void ForStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void BreakStmt::accept(ASTWalker &v){ v.visit(*this); }
-// void ContinueStmt::accept(ASTWalker &v){ v.visit(*this); }
+void BreakStmt::accept(ASTWalker &v){ v.visit(*this); }
+void ContinueStmt::accept(ASTWalker &v){ v.visit(*this); }
 // void GotoStmt::accept(ASTWalker &v){ v.visit(*this); }
 void ReturnStmt::accept(ASTWalker &v){ v.visit(*this); }
 

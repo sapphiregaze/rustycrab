@@ -197,13 +197,24 @@ cAST::Decl* cAST::Driver::emplaceFunctionDefinition(
     throw std::logic_error("Base declarator is not a VarDecl or FunctionDecl for function definition");
   }
 
-  // funcDecl->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
   funcDecl->set_specs(specs);
   funcDecl->set_body(std::move(body));
   // funcDecl->isVariadic = isVariadic;
 
-  // return std::unique_ptr<cAST::Decl>(funcDecl);
   return static_cast<cAST::Decl*>(funcDecl);
+}
+
+std::unique_ptr<cAST::ParamDecl> cAST::Driver::makeParam(cAST::DeclSpecs specs, std::unique_ptr<cAST::Decl> decl) {
+  cAST::ASTNode* parent = head();
+
+  auto param = new cAST::ParamDecl();
+
+  auto* ident = dynamic_cast<cAST::VarDecl*>(decl->child(0));
+
+  param->name = ident->name;
+  // TODO still need to figure out type for param
+
+  return std::unique_ptr<cAST::ParamDecl>(param);
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeIdentifierExpr(const std::string& name) {
@@ -211,13 +222,9 @@ std::unique_ptr<cAST::Expr> cAST::Driver::makeIdentifierExpr(const std::string& 
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for identifier expression");
 
-  // auto* ident = parent->emplace_child<cAST::IdentifierExpr>();
-  // ident->set_name(name);
-
-  auto* ident = new cAST::IdentifierExpr();
+  auto* ident = parent->emplace_child<cAST::IdentifierExpr>();
   ident->set_name(name);
 
-  // return static_cast<cAST::Expr*>(ident);
   return std::unique_ptr<cAST::Expr>(ident);
 }
 
@@ -298,6 +305,28 @@ std::unique_ptr<cAST::Stmt> cAST::Driver::makeCompoundStmt(std::vector<std::uniq
 
   // return std::unique_ptr<cAST::Stmt>(stmt);
   return std::unique_ptr<cAST::Stmt>(compoundStmt);
+}
+
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeContinue() {
+  cAST::ASTNode* parent = head();
+
+  auto* stmt = parent->emplace_child<cAST::ContinueStmt>();
+  return std::unique_ptr<cAST::Stmt>(stmt);
+}
+
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeBreak() {
+  cAST::ASTNode* parent = head();
+
+  auto* stmt = parent->emplace_child<cAST::BreakStmt>();
+  return std::unique_ptr<cAST::Stmt>(stmt);
+}
+
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeReturn(std::unique_ptr<cAST::Expr> expr) {
+  cAST::ASTNode* parent = head();
+
+  auto* stmt = parent->emplace_child<cAST::ReturnStmt>();
+  stmt->value = std::move(expr);
+  return std::unique_ptr<cAST::Stmt>(stmt);
 }
 
 cAST::DeclSpecs cAST::Driver::makeSpecsFromBuiltinType(cAST::BUILTIN_TYPE bt) {

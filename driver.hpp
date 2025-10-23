@@ -58,13 +58,18 @@ public:
 
   std::unique_ptr<cAST::Stmt> makeCompoundStmt(std::vector<std::unique_ptr<cAST::Stmt>> stmts);
 
-  std::unique_ptr<cAST::Decl> makeFunctionDeclarator( std::unique_ptr<cAST::Decl> baseDecl, std::vector<std::unique_ptr<cAST::ParamDecl>> params, bool isVariadic);
+  std::unique_ptr<cAST::Stmt> makeContinue();
+  std::unique_ptr<cAST::Stmt> makeBreak();
+  std::unique_ptr<cAST::Stmt> makeReturn(std::unique_ptr<cAST::Expr> expr);
+
+  std::unique_ptr<cAST::Decl> makeFunctionDeclarator(std::unique_ptr<cAST::Decl> baseDecl, std::vector<std::unique_ptr<cAST::ParamDecl>> params, bool isVariadic);
   cAST::Decl* emplaceFunctionDefinition(
     std::unique_ptr<cAST::Decl> baseDecl,
     std::unique_ptr<cAST::Stmt> body,
     DeclSpecs specs,
     bool isVariadic
   );
+  std::unique_ptr<cAST::ParamDecl> makeParam(cAST::DeclSpecs specs, std::unique_ptr<cAST::Decl> decl);
   std::unique_ptr<cAST::Decl> makeIdentDeclarator(const std::string& name);
   std::unique_ptr<cAST::Decl> makeInitDecl(std::unique_ptr<cAST::Decl> decl, std::unique_ptr<cAST::Expr> init);
 

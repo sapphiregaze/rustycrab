@@ -234,7 +234,7 @@ void prettyprint(ASTNode &n, std::ostream &os);
 // struct VarDecl;
 // struct ParamDecl;
 // struct FieldDecl;
-// struct FunctionDecl;
+struct FunctionDecl;
 // struct DeclStmt;
 // struct TranslationUnit;
 
@@ -480,6 +480,14 @@ struct ReturnStmt : public Stmt {
   void accept(ASTWalker &v) override;
 };
 
+struct ContinueStmt : public Stmt {
+  void accept(ASTWalker &v) override;
+};
+
+struct BreakStmt : public Stmt {
+  void accept(ASTWalker &v) override;
+};
+
 // declarations
 struct Decl : public ASTNode {
   virtual ~Decl() = default;
@@ -633,8 +641,8 @@ struct ASTWalker {
   // virtual void visit(CaseStmt&) {}
   // virtual void visit(DefaultStmt&) {}
   // virtual void visit(LabelStmt&) {}
-  // virtual void visit(BreakStmt&) {}
-  // virtual void visit(ContinueStmt&) {}
+  virtual void visit(BreakStmt&) {}
+  virtual void visit(ContinueStmt&) {}
   // virtual void visit(GotoStmt&) {}
   virtual void visit(ReturnStmt&) {}
 
