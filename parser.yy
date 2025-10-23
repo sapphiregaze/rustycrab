@@ -413,18 +413,24 @@ statement
 compound_statement
   : '{' '}' {
       std::cout << "Parsed empty compound statement." << std::endl;
-      $$ = driver.makeCompoundStmt( std::vector<std::unique_ptr<cAST::ASTNode>>{} );
+      $$ = driver.makeCompoundStmt( std::vector<std::unique_ptr<cAST::Stmt>>{} );
     }
-  /* | '{' block_item_list '}' { $$ = driver.makeCompoundStmt(std::move($2)); } */
+  | '{' block_item_list '}' { $$ = driver.makeCompoundStmt(std::move($2)); }
   ;
 
 block_item_list
-  : block_item { $$ = driver.singleton(std::move($1)); }
-  | block_item_list block_item { $1.emplace_back(std::move($2)); $$ = std::move($1); }
+  : block_item {
+      $$ = std::vector<std::unique_ptr<cAST::Stmt>>{};
+      $$.emplace_back(std::move($1));
+    }
+  | block_item_list block_item {
+      $1.emplace_back(std::move($2)); 
+      $$ = std::move($1);
+    }
   ;
 
 block_item
-  : declaration { $$ = std::make_unique<cAST::DeclStmt>(std::move($1));}
+  : declaration { $$ = driver.makeDeclStmt(std::move($1));}
   | statement {
       std::cout << "Parsed statement as block item." << std::endl;
       $$ = std::move($1);

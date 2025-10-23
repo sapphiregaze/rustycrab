@@ -111,7 +111,7 @@ std::unique_ptr<cAST::Expr> cAST::Driver::makeBinary(cAST::BINARY_OPERATOR op, s
   return std::unique_ptr<cAST::Expr>(binary);
 }
 
-cAST::Expr* cAST::Driver::makeCast(std::unique_ptr<cAST::TypeNode> type, std::unique_ptr<cAST::Expr> expr) {
+std::unique_ptr<cAST::Expr> cAST::Driver::makeCast(std::unique_ptr<cAST::TypeNode> type, std::unique_ptr<cAST::Expr> expr) {
   cAST::ASTNode* parent = head();
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for cast expression");
@@ -120,7 +120,7 @@ cAST::Expr* cAST::Driver::makeCast(std::unique_ptr<cAST::TypeNode> type, std::un
   cast->set_typeOperand(std::move(type));
   cast->set_operand(std::move(expr));
 
-  return static_cast<cAST::Expr*>(cast);
+  return std::unique_ptr<cAST::Expr>(cast);
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeCond(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Expr> thenExpr, std::unique_ptr<cAST::Expr> elseExpr) {
@@ -260,17 +260,17 @@ std::unique_ptr<cAST::Expr> cAST::Driver::makeStringLiteral(const std::string& v
   return std::unique_ptr<cAST::Expr>(lit);
 }
 
-cAST::Stmt* cAST::Driver::makeNullStmt() {
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeNullStmt() {
   cAST::ASTNode* parent = head();
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for null statement");
 
   auto* stmt = new cAST::NullStmt();
 
-  return static_cast<cAST::Stmt*>(stmt);
+  return std::unique_ptr<cAST::Stmt>(stmt);
 }
 
-cAST::Stmt* cAST::Driver::makeExprStmt(std::unique_ptr<cAST::Expr> expr) {
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeExprStmt(std::unique_ptr<cAST::Expr> expr) {
   cAST::ASTNode* parent = head();
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for expression statement");
@@ -278,10 +278,10 @@ cAST::Stmt* cAST::Driver::makeExprStmt(std::unique_ptr<cAST::Expr> expr) {
   auto* stmt = parent->emplace_child<cAST::ExprStmt>();
   stmt->set_expr(std::move(expr));
 
-  return static_cast<cAST::Stmt*>(stmt);
+  return std::unique_ptr<cAST::Stmt>(stmt);
 }
 
-std::unique_ptr<cAST::Stmt> cAST::Driver::makeCompoundStmt(std::vector<std::unique_ptr<cAST::ASTNode>> stmts) {
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeCompoundStmt(std::vector<std::unique_ptr<cAST::Stmt>> stmts) {
   cAST::ASTNode* parent = head();
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for compound statement");
@@ -365,7 +365,7 @@ std::unique_ptr<cAST::Decl> cAST::Driver::makeInitDecl(std::unique_ptr<cAST::Dec
   }
 }
 
-cAST::Stmt* cAST::Driver::makeDeclStmt(std::unique_ptr<cAST::Decl> decl) {
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeDeclStmt(std::unique_ptr<cAST::Decl> decl) {
   cAST::ASTNode* parent = head();
   assert(parent && "ensure_root failed to provide a parent");
   if (!parent) throw std::logic_error("No valid parent at head() for declaration statement");
@@ -373,14 +373,14 @@ cAST::Stmt* cAST::Driver::makeDeclStmt(std::unique_ptr<cAST::Decl> decl) {
   auto* stmt = parent->emplace_child<cAST::DeclStmt>();
   stmt->set_decl(std::move(decl));
 
-  return static_cast<cAST::Stmt*>(stmt);
+  return std::unique_ptr<cAST::Stmt>(stmt);
 }
 
 // cAST::Expr* cAST::Driver::singleton(std::unique_ptr<cAST::Expr> expr) {
 //   return push_expression(std::move(expr));
 // }
 
-cAST::Expr* cAST::Driver::makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer) {
+std::unique_ptr<cAST::Expr> cAST::Driver::makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer) {
   auto node = std::make_unique<cAST::MemberExpr>();
   node->set_parent(head());
   cAST::Expr* raw = node.get();
@@ -388,7 +388,7 @@ cAST::Expr* cAST::Driver::makeMember(std::unique_ptr<cAST::Expr> base, const std
   if (node->base) node->base->set_parent(raw);
   node->memberName = memberName;
   node->isPointer = isPointer;
-  return raw;
+  return std::unique_ptr<cAST::Expr>(raw);
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeAssign(cAST::AssignOp op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right) {
@@ -405,21 +405,29 @@ std::unique_ptr<cAST::Expr> cAST::Driver::makeAssign(cAST::AssignOp op, std::uni
   return std::unique_ptr<cAST::Expr>(assign);
 }
 
-cAST::Expr* cAST::Driver::makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index) {
+std::unique_ptr<cAST::Expr> cAST::Driver::makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index) {
   auto node = std::make_unique<cAST::ArraySubscriptExpr>();
   node->set_parent(head());
 
   cAST::Expr* raw = node.get();
   node->set_base(std::move(base));
-
   if (node->base) node->base->set_parent(raw);
   node->set_index(std::move(index));
 
-  return raw;
+  return std::unique_ptr<cAST::Expr>(raw);
 }
 
-cAST::Expr* cAST::Driver::makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args) {
+std::unique_ptr<cAST::Expr> cAST::Driver::makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args) {
+  auto node = std::make_unique<cAST::CallExpr>();
+  node->set_parent(head());
 
+  cAST::Expr* raw = node.get();
+  node->set_callee(std::move(callee));
+  if (node->callee) node->callee->set_parent(raw);
+
+  node->arguments = std::move(args);
+
+  return std::unique_ptr<cAST::Expr>(raw);
 }
 
 cAST::DeclSpecs cAST::Driver::makeSpecsFromTypeNode(std::unique_ptr<cAST::TypeNode> type) {
