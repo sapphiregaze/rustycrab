@@ -406,7 +406,16 @@ std::unique_ptr<cAST::Expr> cAST::Driver::makeAssign(cAST::AssignOp op, std::uni
 }
 
 cAST::Expr* cAST::Driver::makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index) {
+  auto node = std::make_unique<cAST::ArraySubscriptExpr>();
+  node->set_parent(head());
 
+  cAST::Expr* raw = node.get();
+  node->set_base(std::move(base));
+
+  if (node->base) node->base->set_parent(raw);
+  node->set_index(std::move(index));
+
+  return raw;
 }
 
 cAST::Expr* cAST::Driver::makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args) {
