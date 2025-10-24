@@ -186,6 +186,7 @@ cAST::Decl* cAST::Driver::emplaceFunctionDefinition(
 
   auto* funcDecl = parent->emplace_child<cAST::FunctionDecl>();
 
+  // TODO it seems like this will always lead to a previous function declaration found
   if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(baseDecl.get())) {
     std::cout << "Function name from VarDecl: " << varDecl->name << std::endl;
     funcDecl->name = varDecl->name;

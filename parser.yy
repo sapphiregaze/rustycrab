@@ -88,12 +88,11 @@
 %type <std::vector<std::unique_ptr<cAST::Stmt>>>
   block_item_list
 
+%type <std::unique_ptr<cAST::Decl>>
+  declaration external_declaration declarator direct_declarator init_declarator
 
 %type <cAST::Decl*>
   pointer function_definition
-
-%type <std::unique_ptr<cAST::Decl>>
-  declaration external_declaration declarator direct_declarator init_declarator
 
 %type <std::vector<std::unique_ptr<cAST::Decl>>>
   init_declarator_list;
@@ -482,15 +481,20 @@ jump_statement
   ;
 
 translation_unit
-	: external_declaration { }
-	| translation_unit external_declaration { }
+	: external_declaration {
+    driver.ensure_root();
+  }
+	| translation_unit external_declaration {
+    driver.ensure_root();
+  }
 	;
 
 external_declaration
-  : declaration { }
+  : declaration { 
+    std::cout << "Declaration parsed from external_declaration." << std::endl;
+  }
   | function_definition {
-      std::cout << "Function definition parsed." << std::endl;
-      // $$ = std::move($1);
+      std::cout << "Function definition parsed from external_declaration." << std::endl;
     }
   ;
 

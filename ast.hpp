@@ -565,9 +565,9 @@ struct FunctionDecl : public Decl {
 };
 
 struct TranslationUnit : public Decl {
-  std::vector<std::unique_ptr<Decl>> declarations;
-  void addDecl(std::unique_ptr<Decl> decl) {
-    declarations.push_back( std::move(decl) );
+  std::vector<Decl*> declarations;
+  void addDecl(Decl* decl) {
+    declarations.push_back( decl );
   }
   void accept(ASTWalker &v) override;
 };
