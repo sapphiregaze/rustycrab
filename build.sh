@@ -3,6 +3,6 @@
 mkdir -p build
 cd build
 
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Debug ..
 chmod u+x ./bison-shim.sh
 make

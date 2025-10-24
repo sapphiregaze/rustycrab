@@ -137,7 +137,7 @@ string
 postfix_expression
   : primary_expression { $$ = std::move($1); }
   /* | postfix_expression '[' expression ']' { $$ = driver.makeSubscript(std::move($1), std::move($3)); } */
-  /* | postfix_expression '(' ')' { $$ = driver.makeCall(std::move($1), {}); } */
+  | postfix_expression '(' ')' { $$ = driver.makeCall(std::move($1), {}); }
   | postfix_expression '(' argument_expression_list ')' { $$ = driver.makeCall(std::move($1), std::move($3)); }
   /* | postfix_expression '.' IDENTIFIER { $$ = driver.makeMember(std::move($1), *$3, false); } */
   /* | postfix_expression PTR_OP IDENTIFIER { $$ = driver.makeMember(std::move($1), *$3, true); } */
@@ -380,6 +380,10 @@ parameter_declaration
   | declaration_specifiers { $$ = driver.makeParam($1, nullptr); }
   ;
 
+identifier_list
+	: IDENTIFIER
+	| identifier_list ',' IDENTIFIER
+
 type_name
   : specifier_qualifier_list { $$ = std::move($1.type); }
   ;
@@ -423,7 +427,10 @@ compound_statement
       std::cout << "Parsed empty compound statement." << std::endl;
       $$ = driver.makeCompoundStmt( std::vector<std::unique_ptr<cAST::Stmt>>{} );
     }
-  | '{' block_item_list '}' { $$ = driver.makeCompoundStmt(std::move($2)); }
+  | '{' block_item_list '}' { 
+      std::cout << "Parsing compound statement w/ block_item_list" << std::endl;
+      $$ = driver.makeCompoundStmt(std::move($2)); 
+    }
   ;
 
 block_item_list
@@ -438,7 +445,10 @@ block_item_list
   ;
 
 block_item
-  : declaration { $$ = driver.makeDeclStmt(std::move($1));}
+  : declaration { 
+    std::cout << "Parsed declaration as block item." << std::endl;
+    $$ = driver.makeDeclStmt(std::move($1));
+  }
   | statement {
       std::cout << "Parsed statement as block item." << std::endl;
       $$ = std::move($1);
