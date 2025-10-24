@@ -325,7 +325,8 @@ init_declarator_list
       $$.emplace_back(std::move($1));
     }
   | init_declarator_list ',' init_declarator {
-      $1.emplace_back(std::move($3)); $$ = std::move($1);
+      $1.emplace_back(std::move($3)); 
+      $$ = std::move($1);
     }
   ;
 
@@ -445,9 +446,9 @@ block_item_list
 
 block_item
   : declaration { 
-    std::cout << "Parsed declaration as block item." << std::endl;
-    $$ = driver.makeDeclStmt(std::move($1));
-  }
+      std::cout << "Parsed declaration as block item." << std::endl;
+      $$ = driver.makeDeclStmt(std::move($1));
+    }
   | statement {
       std::cout << "Parsed statement as block item." << std::endl;
       $$ = std::move($1);
@@ -482,19 +483,23 @@ jump_statement
 
 translation_unit
 	: external_declaration {
-    driver.ensure_root();
-  }
+      driver.ensure_root();
+      driver.root()->add_child(std::move($1));
+    }
 	| translation_unit external_declaration {
-    driver.ensure_root();
-  }
+      driver.ensure_root();
+      driver.root()->add_child(std::move($2));
+    }
 	;
 
 external_declaration
   : declaration { 
-    std::cout << "Declaration parsed from external_declaration." << std::endl;
-  }
+      std::cout << "Declaration parsed from external_declaration." << std::endl;
+      $$ = std::move($1);
+    }
   | function_definition {
       std::cout << "Function definition parsed from external_declaration." << std::endl;
+      $$ = std::unique_ptr<cAST::Decl>($1);
     }
   ;
 

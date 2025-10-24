@@ -281,22 +281,25 @@ cAST::Decl* cAST::Driver::makeDeclFromSpecs(cAST::DeclSpecs specs) {
 
 std::unique_ptr<cAST::DeclGroup> cAST::Driver::makeDeclGroupFromSpecsAndInits(cAST::DeclSpecs specs, std::vector<std::unique_ptr<cAST::Decl>> initDecls) {
   auto* group = new DeclGroup();
-  auto decls = std::vector<cAST::Decl*>();
+  auto decls = std::vector<std::unique_ptr<Decl>>();
 
   for (auto& decl : initDecls) {
-    if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(decl.get())) {
-      varDecl->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
-      decls.push_back(varDecl);
-    } else if (auto* functionDecl = dynamic_cast<cAST::FunctionDecl*>(decl.get())) {
+    if (auto* varDeclRaw = dynamic_cast<VarDecl*>(decl.get())) {
+      auto varDecl(static_cast<VarDecl*>(decl.release()));
+
+      varDecl->set_specs(std::make_unique<DeclSpecs>(specs));
+      decls.push_back(std::unique_ptr<cAST::Decl>(varDecl)); // TODO this hints at the fact that maybe all pointers should be smart pointers?
+    } else if (auto* functionDeclRaw = dynamic_cast<FunctionDecl*>(decl.get())) {
+      auto functionDecl(static_cast<FunctionDecl*>(decl.release()));
+
       functionDecl->set_specs(specs);
-      decls.push_back(functionDecl);
+      decls.push_back(std::unique_ptr<cAST::Decl>(functionDecl)); // TODO this hints at the fact that maybe all pointers should be smart pointers?
     } else {
       throw std::logic_error("Expected VarDecl or FuncDecl in initDecls");
     }
   }
 
-  group->set_decls(std::vector<cAST::Decl*>());
-
+  group->set_decls(std::move(decls));
   return std::unique_ptr<cAST::DeclGroup>(group);
 }
 

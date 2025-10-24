@@ -374,8 +374,8 @@ struct Printer : ASTWalker {
     os << "Declaration Group:\n";
     for(size_t i = 0; i < d.decls.size(); ++i){
       if(i) os << ", ";
-      auto &decl = *d.decls[i];
-      decl.accept(*this);
+      auto decl = std::move(d.decls[i]);
+      decl->accept(*this);
     }
 
     os << ";\n";

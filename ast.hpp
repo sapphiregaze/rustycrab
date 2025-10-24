@@ -523,11 +523,10 @@ struct VarDecl : public Decl {
 };
 
 struct DeclGroup : public Decl {
-  // TODO would be nice to change this to smart pointer if possible
-  std::vector<Decl*> decls;
+  std::vector<std::unique_ptr<Decl>> decls;
 
-  void set_decls(std::vector<Decl*> d) {
-    decls = d;
+  void set_decls(std::vector<std::unique_ptr<Decl>> d) {
+    decls = std::move(d);
   }
 
   void accept(ASTWalker &v) override;
