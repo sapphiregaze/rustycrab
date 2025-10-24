@@ -267,19 +267,19 @@ expression
 declaration
   : declaration_specifiers ';' {
       std::cout << "Parsed declaration with only specifiers." << std::endl;
-      driver.emplaceDeclFromSpecs($1);
+      $$ = std::unique_ptr<cAST::Decl>(driver.makeDeclFromSpecs($1));
     }
   | declaration_specifiers init_declarator_list ';' {
       std::cout << "Parsed declaration with specifiers and initializers." << std::endl;
       std::cout << "Number of initializers: " << $2.size() << std::endl;
-      driver.emplaceDeclListFromSpecsAndInits($1, std::move($2));
+      $$ = std::move(driver.makeDeclGroupFromSpecsAndInits($1, std::move($2)));
     }
   ;
 
 declaration_specifiers
   : type_specifier {
       std::cout << "Parsed type specifier in declaration specifiers." << std::endl;
-      $$ = driver.makeSpecsFromBuiltinType($1);
+      $$ = std::move(driver.makeSpecsFromBuiltinType($1));
     }
   | type_qualifier { $$ = driver.makeSpecsFromTypeQual($1); }
   | storage_class_specifier { $$ = driver.makeSpecsFromStorageClass($1); }
@@ -502,7 +502,7 @@ function_definition
   : declaration_specifiers declarator compound_statement {
       std::cout << "Parsed function definition." << std::endl;
       std::cout << "Declarator name: " << static_cast<cAST::VarDecl*>($2.get())->name << std::endl;
-      $$ = driver.emplaceFunctionDefinition(std::move($2), std::move($3), std::move($1), false);
+      $$ = driver.makeFunctionDefinition(std::move($2), std::move($3), std::move($1), false);
     }
   ;
 %%

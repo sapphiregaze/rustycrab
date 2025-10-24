@@ -234,7 +234,7 @@ void prettyprint(ASTNode &n, std::ostream &os);
 // struct VarDecl;
 // struct ParamDecl;
 // struct FieldDecl;
-struct FunctionDecl;
+// struct FunctionDecl;
 // struct DeclStmt;
 // struct TranslationUnit;
 
@@ -500,6 +500,7 @@ struct DeclStmt : public Stmt {
   }
   void accept(ASTWalker &v) override;
 };
+
 struct VarDecl : public Decl {
   std::string name;
   std::unique_ptr<TypeNode> type;
@@ -516,6 +517,17 @@ struct VarDecl : public Decl {
 
   void set_specs(std::unique_ptr<DeclSpecs> s) {
     specs = std::move(s);
+  }
+
+  void accept(ASTWalker &v) override;
+};
+
+struct DeclGroup : public Decl {
+  // TODO would be nice to change this to smart pointer if possible
+  std::vector<Decl*> decls;
+
+  void set_decls(std::vector<Decl*> d) {
+    decls = d;
   }
 
   void accept(ASTWalker &v) override;
@@ -649,6 +661,7 @@ struct ASTWalker {
   // Decl
   virtual void visit(VarDecl&) {}
   virtual void visit(ParamDecl&) {}
+  virtual void visit(DeclGroup&) {}
   // virtual void visit(TypedefDecl&) {}
   virtual void visit(FieldDecl&) {}
   // virtual void visit(RecordDecl&) {}

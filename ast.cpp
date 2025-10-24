@@ -41,6 +41,7 @@ void ReturnStmt::accept(ASTWalker &v){ v.visit(*this); }
 // Decl
 void VarDecl::accept(ASTWalker &v){ v.visit(*this); }
 void ParamDecl::accept(ASTWalker &v){ v.visit(*this); }
+void DeclGroup::accept(ASTWalker &v){ v.visit(*this); }
 void FieldDecl::accept(ASTWalker &v){ v.visit(*this); }
 void FunctionDecl::accept(ASTWalker &v){ v.visit(*this); }
 void DeclStmt::accept(ASTWalker &v){ v.visit(*this); }
@@ -366,6 +367,20 @@ struct Printer : ASTWalker {
     os << ";\n";
   }
 
+  void visit(DeclGroup &d) override {
+    indent();
+
+    // TODO keep eye on this to make sure that Decl* vs unique_ptr<Decl> is not causing an issue
+    os << "Declaration Group:\n";
+    for(size_t i = 0; i < d.decls.size(); ++i){
+      if(i) os << ", ";
+      auto &decl = *d.decls[i];
+      decl.accept(*this);
+    }
+
+    os << ";\n";
+  }
+
   void visit(ParamDecl &d) override {
     indent();
     os << "Parameter Declaration:\n";
@@ -388,6 +403,7 @@ struct Printer : ASTWalker {
 
   void visit(FunctionDecl &d) override {
     indent();
+    
     os << "Function Declaration:\n";
     if(d.type) d.type->accept(*this);
     // auto& specs = *d.specs;
