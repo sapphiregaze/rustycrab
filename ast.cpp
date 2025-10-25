@@ -286,14 +286,18 @@ struct Printer : ASTWalker {
 
   void visit(AssignExpr &e) override {
     indent();
-    os << "Assignment Expression: ";
+    os << "Assignment Expression:\n";
+
+    setIndentLevel(indentLevel + 2);
     if(e.left){
       e.left->accept(*this);
     }
-    os << " " << assignOpToString(e.op) << " ";
+    indent();
+    os << assignOpToString(e.op) << "\n";
     if(e.right) {
       e.right->accept(*this);
     }
+    setIndentLevel(indentLevel - 2);
   }
 
   void visit(MemberExpr &e) override {
@@ -311,28 +315,33 @@ struct Printer : ASTWalker {
 
   void visit(CallExpr &e) override {
     indent();
-    os << "Function Call: ";
+    os << "Function Call:\n";
     setIndentLevel(indentLevel + 2);
     if(e.callee) e.callee->accept(*this);
+    
+    indent();
     os << "(";
     for(size_t i = 0; i < e.arguments.size(); ++i){
       if(i) os << ", ";
       if(e.arguments[i]) e.arguments[i]->accept(*this);
     }
     os << ")";
+    setIndentLevel(indentLevel - 2);
   }
 
   void visit(NullStmt&) override {
     indent();
     os << "Null Statement";
-    os << ";\n";
+    os << "\n";
   }
 
   void visit(ExprStmt &s) override {
     indent();
-    os << "Expression Statement: ";
+    os << "Expression Statement:\n";
+    setIndentLevel(indentLevel + 2);
     if(s.expr) s.expr->accept(*this);
-    os << ";\n";
+    setIndentLevel(indentLevel - 2);
+    os << "\n";
   }
 
   void visit(IfStmt &s) override {
@@ -358,13 +367,15 @@ struct Printer : ASTWalker {
     auto& specs = *d.specs;
     printSpecs(specs);
 
-    if(!d.name.empty()) os << " " << d.name;
+    if(!d.name.empty()) os << " " << d.name  << "\n";
 
     if(d.init){
-      os << " = ";
+      setIndentLevel(indentLevel + 2);
+      indent();
+      os << "=\n";
       d.init->accept(*this);
+      setIndentLevel(indentLevel - 2);
     }
-    os << ";\n";
   }
 
   void visit(DeclGroup &d) override {
@@ -372,13 +383,14 @@ struct Printer : ASTWalker {
 
     // TODO keep eye on this to make sure that Decl* vs unique_ptr<Decl> is not causing an issue
     os << "Declaration Group:\n";
+    setIndentLevel(indentLevel + 2);
     for(size_t i = 0; i < d.decls.size(); ++i){
-      if(i) os << ", ";
       auto decl = std::move(d.decls[i]);
       decl->accept(*this);
     }
+    setIndentLevel(indentLevel - 2);
 
-    os << ";\n";
+    os << "\n";
   }
 
   void visit(ParamDecl &d) override {
@@ -452,7 +464,9 @@ struct Printer : ASTWalker {
   void visit(DeclStmt &s) override {
     indent();
     os << "Declaration Statement:\n";
+    setIndentLevel(indentLevel + 2);
     if(s.declaration) s.declaration->accept(*this);
+    setIndentLevel(indentLevel - 2);
   }
 
   void visit(ConditionalExpr &e) override {
