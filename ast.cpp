@@ -246,7 +246,7 @@ struct Printer : ASTWalker {
   void visit(StringLiteral &e) override {
     indent();
     os << "String Literal: ";
-    os << '"' << e.literal << '"';
+    os << e.literal;
     os << "\n";
   }
 
@@ -290,12 +290,20 @@ struct Printer : ASTWalker {
 
     setIndentLevel(indentLevel + 2);
     if(e.left){
+      indent();
+      os << "LHS:\n";
+      setIndentLevel(indentLevel + 2);
       e.left->accept(*this);
+      setIndentLevel(indentLevel - 2);
     }
     indent();
-    os << assignOpToString(e.op) << "\n";
+    os << "Operator: " << assignOpToString(e.op) << "\n";
     if(e.right) {
+      indent();
+      os << "RHS:\n";
+      setIndentLevel(indentLevel + 2);
       e.right->accept(*this);
+      setIndentLevel(indentLevel - 2);
     }
     setIndentLevel(indentLevel - 2);
   }
@@ -320,13 +328,12 @@ struct Printer : ASTWalker {
     if(e.callee) e.callee->accept(*this);
     
     indent();
-    os << "(";
+    os << "Arguments:\n";
+    setIndentLevel(indentLevel + 2);
     for(size_t i = 0; i < e.arguments.size(); ++i){
-      if(i) os << ", ";
       if(e.arguments[i]) e.arguments[i]->accept(*this);
     }
-    os << ")";
-    setIndentLevel(indentLevel - 2);
+    setIndentLevel(indentLevel - 4);
   }
 
   void visit(NullStmt&) override {
@@ -368,14 +375,18 @@ struct Printer : ASTWalker {
     setIndentLevel(indentLevel + 2);
     auto& specs = *d.specs;
     indent();
+    os << "Type: ";
     printSpecs(specs);
 
     if(!d.name.empty()) os << " " << d.name  << "\n";
 
     if(d.init){
       indent();
-      os << "=\n";
+      os << "Value:\n";
+
+      setIndentLevel(indentLevel + 2);
       d.init->accept(*this);
+      setIndentLevel(indentLevel - 2);
     }
 
     setIndentLevel(indentLevel - 2);
@@ -424,6 +435,7 @@ struct Printer : ASTWalker {
     
     setIndentLevel(indentLevel + 2);
     indent();
+    os << "Function Signature: ";
     printSpecs(d.specs);
     os << " " << d.name << "(";
 
@@ -444,12 +456,11 @@ struct Printer : ASTWalker {
     os << ")\n";
 
     if(d.body){
-      setIndentLevel(indentLevel + 2);
       indent();
       std::cout << "Function Body:\n";
       setIndentLevel(indentLevel + 2);
       d.body->accept(*this);
-      setIndentLevel(indentLevel - 4);
+      setIndentLevel(indentLevel - 2);
     }
 
     setIndentLevel(indentLevel - 2);

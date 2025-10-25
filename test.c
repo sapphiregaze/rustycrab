@@ -3,13 +3,5 @@ void main() {
 	float a;
 	a = x;
 
-	test();
-}
-
-void main() {
-	int x = 5, b, c = 3;
-	float a;
-	a = x;
-
-	test();
+	test("hello!");
 }
