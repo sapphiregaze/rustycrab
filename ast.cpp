@@ -421,10 +421,13 @@ struct Printer : ASTWalker {
     
     os << "Function Declaration:\n";
     if(d.type) d.type->accept(*this);
-    // auto& specs = *d.specs;
+    
+    setIndentLevel(indentLevel + 2);
+    indent();
     printSpecs(d.specs);
     os << " " << d.name << "(";
 
+    // TODO this probably looks really bad with formatting, will need to be changed
     for(size_t i = 0; i < d.params.size(); ++i){
       if(i) os << ", ";
       auto &p = *d.params[i];
@@ -438,14 +441,18 @@ struct Printer : ASTWalker {
       os << "...";
     }
 
-    os << ") ";
+    os << ")\n";
 
     if(d.body){
-      std::cout << "\nFunction Body:\n";
+      setIndentLevel(indentLevel + 2);
+      indent();
+      std::cout << "Function Body:\n";
+      setIndentLevel(indentLevel + 2);
       d.body->accept(*this);
-    } else {
-      os << ";\n";
+      setIndentLevel(indentLevel - 4);
     }
+
+    setIndentLevel(indentLevel - 2);
   }
 
   void visit (CompoundStmt &s) override {
