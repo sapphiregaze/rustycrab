@@ -363,19 +363,22 @@ struct Printer : ASTWalker {
 
   void visit(VarDecl &d) override {
     indent();
-    os << "Variable Declaration: ";
+    os << "Variable Declaration:\n";
+
+    setIndentLevel(indentLevel + 2);
     auto& specs = *d.specs;
+    indent();
     printSpecs(specs);
 
     if(!d.name.empty()) os << " " << d.name  << "\n";
 
     if(d.init){
-      setIndentLevel(indentLevel + 2);
       indent();
       os << "=\n";
       d.init->accept(*this);
-      setIndentLevel(indentLevel - 2);
     }
+
+    setIndentLevel(indentLevel - 2);
   }
 
   void visit(DeclGroup &d) override {
