@@ -366,15 +366,13 @@ std::unique_ptr<cAST::Expr> cAST::Driver::makeSubscript(std::unique_ptr<cAST::Ex
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args) {
-  auto node = std::make_unique<cAST::CallExpr>();
+  auto* call = new cAST::CallExpr();
+  call->set_callee(std::move(callee));
+  if (call->callee) call->callee->set_parent(call); // TODO careful here
 
-  cAST::Expr* raw = node.get();
-  node->set_callee(std::move(callee));
-  if (node->callee) node->callee->set_parent(raw);
+  call->arguments = std::move(args);
 
-  node->arguments = std::move(args);
-
-  return std::unique_ptr<cAST::Expr>(raw);
+  return std::unique_ptr<cAST::Expr>(call);
 }
 
 cAST::DeclSpecs cAST::Driver::makeSpecsFromTypeNode(std::unique_ptr<cAST::TypeNode> type) {
