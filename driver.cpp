@@ -330,39 +330,32 @@ std::unique_ptr<cAST::Stmt> cAST::Driver::makeDeclStmt(std::unique_ptr<cAST::Dec
 // }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer) {
-  auto node = std::make_unique<cAST::MemberExpr>();
-  node->set_parent(head());
-  cAST::Expr* raw = node.get();
+  auto* node = new cAST::MemberExpr();
   node->set_base(std::move(base));
-  if (node->base) node->base->set_parent(raw);
+  if (node->base) node->base->set_parent(node);
   node->memberName = memberName;
   node->isPointer = isPointer;
-  return std::unique_ptr<cAST::Expr>(raw);
+
+  return std::unique_ptr<cAST::Expr>(node);
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeAssign(cAST::AssignOp op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right) {
-  cAST::ASTNode* parent = head();
-  assert(parent && "ensure_root failed to provide a parent");
-  if (!parent) throw std::logic_error("No valid parent at head() for assignment expression");
-
-  auto* assign = parent->emplace_child<cAST::AssignExpr>();
+  auto* assign = new cAST::AssignExpr();
   assign->set_op(op);
   assign->set_left(std::move(left));
   assign->set_right(std::move(right));
 
-  // return static_cast<cAST::Expr*>(assign);
   return std::unique_ptr<cAST::Expr>(assign);
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index) {
-  auto node = std::make_unique<cAST::ArraySubscriptExpr>();
+  auto node = new cAST::ArraySubscriptExpr();
 
-  cAST::Expr* raw = node.get();
   node->set_base(std::move(base));
-  if (node->base) node->base->set_parent(raw);
+  if (node->base) node->base->set_parent(node);
   node->set_index(std::move(index));
 
-  return std::unique_ptr<cAST::Expr>(raw);
+  return std::unique_ptr<cAST::Expr>(node);
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args) {
