@@ -267,10 +267,21 @@ struct Printer : ASTWalker {
   }
 
   void visit(CastExpr &e) override {
-    os << "(";
+    indent();
+    os << "Cast Expression:\n";
+    setIndentLevel(indentLevel + 2);
+
+    indent();
+    os << "Cast Type:\n";
+    setIndentLevel(indentLevel + 2);
     if(e.typeOperand) e.typeOperand->accept(*this);
-    os << ") ";
+    setIndentLevel(indentLevel - 2);
+
+    indent();
+    os << "Cast Value:\n";
+    setIndentLevel(indentLevel + 2);
     if(e.operand) e.operand->accept(*this);
+    setIndentLevel(indentLevel - 2);
   }
 
   void visit(BinaryExpr &e) override {

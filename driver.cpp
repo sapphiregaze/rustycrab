@@ -73,11 +73,11 @@ void cAST::Driver::ensure_root() {
   }
 }
 
-cAST::TypeNode* cAST::Driver::makeBuiltinType(cAST::BUILTIN_TYPE bt) {
+std::unique_ptr<cAST::TypeNode> cAST::Driver::makeBuiltinType(cAST::BUILTIN_TYPE bt) {
   auto* type = new cAST::BuiltinType();
   type->set_type(bt);
 
-  return static_cast<cAST::TypeNode*>(type);
+  return std::unique_ptr<cAST::TypeNode>(type);
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeUnary(cAST::UNARY_OPERATOR op, std::unique_ptr<cAST::Expr> expr) {

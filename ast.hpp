@@ -245,6 +245,7 @@ struct TypeNode;
 struct DeclSpecs {
   std::vector<TYPE_STORAGE_QUALIFIER> storage;
   std::vector<TYPE_QUALIFIER> qualifiers;
+  // TODO does this need to be changed to be a type node?
   BUILTIN_TYPE type;
 
   void set_from_builtin_type(BUILTIN_TYPE bt) {
@@ -252,6 +253,7 @@ struct DeclSpecs {
   }
 
   void set_from_type_node(std::unique_ptr<TypeNode> typeNode) {
+    // TODO does this need to actually read the typeNode?
     type = BUILTIN_TYPE::Int;
 
     // // For simplicity, only handle BuiltinType here

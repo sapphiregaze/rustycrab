@@ -36,7 +36,7 @@ public:
 
   void ensure_root();
 
-  cAST::TypeNode* makeBuiltinType(cAST::BUILTIN_TYPE bt);
+  std::unique_ptr<cAST::TypeNode> makeBuiltinType(cAST::BUILTIN_TYPE bt);
 
   std::unique_ptr<cAST::Expr> makeBinary(cAST::BINARY_OPERATOR op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right);
   std::unique_ptr<cAST::Expr> makeUnary(cAST::UNARY_OPERATOR op, std::unique_ptr<cAST::Expr> expr);

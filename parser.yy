@@ -97,7 +97,7 @@
   init_declarator_list;
 
 
-%type <cAST::TypeNode*> type_name
+%type <std::unique_ptr<cAST::TypeNode>> type_name
 
 
 %type <std::vector<std::unique_ptr<cAST::ParamDecl>>>
@@ -178,7 +178,9 @@ unary_operator
 
 cast_expression
   : unary_expression { $$ = std::move($1); }
-  /* | '(' type_name ')' cast_expression { $$ = driver.makeCast(std::move($2), std::move($4)); } */
+  | '(' type_name ')' cast_expression { 
+      $$ = driver.makeCast(std::move($2), std::move($4)); 
+    }
   ;
 
 multiplicative_expression
@@ -407,14 +409,30 @@ identifier_list
 	| identifier_list ',' IDENTIFIER
 
 type_name
-  : specifier_qualifier_list { $$ = std::move($1.type); }
+  : specifier_qualifier_list { 
+      auto* type = new cAST::BuiltinType();
+      type->type = $1.type;
+      $$ = std::unique_ptr<cAST::TypeNode>(type); 
+    }
   ;
 
 specifier_qualifier_list
-	: type_specifier specifier_qualifier_list { $$ = driver.combineSpecs(driver.makeSpecsFromTypeNode(std::move($1)), $2); }
-	| type_specifier { $$ = driver.makeSpecsFromTypeNode(std::move($1)); }
-	| type_qualifier specifier_qualifier_list { $$ = driver.combineSpecs(driver.makeSpecsFromTypeNode(driver.makeBuiltinType()), $2); }
-	| type_qualifier { $$ = driver.makeSpecsFromTypeNode(driver.makeBuiltinType()); }
+	: type_specifier specifier_qualifier_list { 
+      auto* type = new cAST::BuiltinType();
+      type->type = $1;
+      $$ = driver.combineSpecs(driver.makeSpecsFromTypeNode(std::unique_ptr<cAST::TypeNode>(type)), $2); 
+    }
+	| type_specifier { 
+      auto* type = new cAST::BuiltinType();
+      type->type = $1;
+      $$ = driver.makeSpecsFromTypeNode(std::unique_ptr<cAST::TypeNode>(type)); 
+    }
+	| type_qualifier specifier_qualifier_list { 
+      $$ = driver.combineSpecs(driver.makeSpecsFromTypeQual($1), $2); 
+    }
+	| type_qualifier { 
+      $$ = driver.makeSpecsFromTypeQual($1); 
+    }
 	;
 
 initializer
