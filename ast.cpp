@@ -409,10 +409,18 @@ struct Printer : ASTWalker {
 
   void visit(ParamDecl &d) override {
     indent();
-    os << "Parameter Declaration: ";
-    if(d.type) d.type->accept(*this);
-    if(!d.name.empty()) os << " " << d.name;
-    if(d.isVariadic) os << " ...";
+    os << "Parameter Declaration:\n";
+    setIndentLevel(indentLevel + 2);
+    if(d.type) {
+      d.type->accept(*this);
+    }
+    if(!d.name.empty()) {
+      indent();
+      os << "Parameter Name: " << d.name << "\n";
+    }
+    indent();
+    os << "Variadic: " << (d.isVariadic ? "True" : "False") << "\n";
+    setIndentLevel(indentLevel - 2);
   }
 
   void visit(FieldDecl &d) override {
@@ -449,14 +457,13 @@ struct Printer : ASTWalker {
     }
     setIndentLevel(indentLevel - 2);
 
-    if(d.isVariadic){
-      if(!d.params.empty()) {
-        os << ", ";
-      }
-      os << "...";
-    }
-
-    os << "\n";
+    // TODO currently this is shown in the ParameterDecl print, but that might need to move here
+    // if(d.isVariadic){
+    //   if(!d.params.empty()) {
+    //     os << ", ";
+    //   }
+    //   os << "...";
+    // }
 
     if(d.body){
       indent();

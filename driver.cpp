@@ -171,11 +171,14 @@ std::unique_ptr<cAST::ParamDecl> cAST::Driver::makeParam(cAST::DeclSpecs specs, 
   cAST::ASTNode* parent = head();
 
   auto param = new cAST::ParamDecl();
-
   auto* ident = dynamic_cast<cAST::VarDecl*>(decl.get());
+  auto* type = new cAST::BuiltinType();
 
   param->name = ident->name;
-  // TODO still need to figure out type for param
+
+  // TODO i'm worried that there is some other information that needs to be contained in type
+  type->set_type(specs.type);
+  param->type = std::unique_ptr<cAST::BuiltinType>(type);
 
   return std::unique_ptr<cAST::ParamDecl>(param);
 }
