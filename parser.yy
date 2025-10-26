@@ -135,7 +135,10 @@ string
 
 postfix_expression
   : primary_expression { $$ = std::move($1); }
-  /* | postfix_expression '[' expression ']' { $$ = driver.makeSubscript(std::move($1), std::move($3)); } */
+  | postfix_expression '[' expression ']' {
+      std::cout << "Parsed array subscript expression." << std::endl;
+      $$ = driver.makeSubscript(std::move($1), std::move($3));
+    }
   | postfix_expression '(' ')' { $$ = driver.makeCall(std::move($1), {}); }
   | postfix_expression '(' argument_expression_list ')' { $$ = driver.makeCall(std::move($1), std::move($3)); }
   /* | postfix_expression '.' IDENTIFIER { $$ = driver.makeMember(std::move($1), *$3, false); } */
@@ -370,6 +373,14 @@ direct_declarator
   | direct_declarator '(' parameter_type_list ')' { 
       std::cout << "Parsed function declarator with parameters." << std::endl;
       $$ = driver.makeFunctionDeclarator(std::move($1), std::move($3), false /* no variadic */ ); 
+    }
+  | direct_declarator '[' ']' {
+      std::cout << "Parsed array declarator with unspecified size." << std::endl;
+      $$ = driver.makeArrayDeclarator(std::move($1), nullptr);
+    }
+  | direct_declarator '[' assignment_expression ']' {
+      std::cout << "Parsed array declarator with specified size." << std::endl;
+      $$ = driver.makeArrayDeclarator(std::move($1), std::move($3));
     }
   ;
 

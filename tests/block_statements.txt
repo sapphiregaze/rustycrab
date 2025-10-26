@@ -5,9 +5,7 @@ void main () {
   a = x;
   test();
 
-  do {
-    x = x - 1;
-  } while(x > 0);
+  // If statement tests
 
   if(x > 0) {
     b = b + 1;
@@ -19,9 +17,17 @@ void main () {
     a = a + 1.0;
   }
 
+  // Do-while and while loop tests
+
+  do {
+    x = x - 1;
+  } while(x > 0);
+
   while(x < 10) {
     x = x + 1;
   }
+
+  // For loop tests
 
   for(int i = 0; i < 10; i = i + 1) {
     a = a + 2.0;
@@ -32,5 +38,11 @@ void main () {
   for (int j = 0; j < 5; ) {
     b = b + 2;
   }
+
+  // Array test
+
+  int arrr[];
+  int arr[5];
+  arr[0] = 10;
 
 }

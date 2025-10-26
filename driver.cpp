@@ -293,6 +293,10 @@ std::unique_ptr<cAST::DeclGroup> cAST::Driver::makeDeclGroupFromSpecsAndInits(cA
 
       varDecl->set_specs(std::make_unique<DeclSpecs>(specs));
       decls.push_back(std::unique_ptr<cAST::Decl>(varDecl)); // TODO this hints at the fact that maybe all pointers should be smart pointers?
+    } else if (auto* arrdecl = dynamic_cast<cAST::ArrayDecl*>(decl.get())) {
+      // return decl;
+      arrdecl->set_specs(std::make_unique<DeclSpecs>(specs));
+      decls.push_back(std::move(decl));
     } else if (auto* functionDeclRaw = dynamic_cast<FunctionDecl*>(decl.get())) {
       auto functionDecl(static_cast<FunctionDecl*>(decl.release()));
 
@@ -312,13 +316,15 @@ std::unique_ptr<cAST::Decl> cAST::Driver::makeInitDecl(std::unique_ptr<cAST::Dec
   if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(decl.get())) {
     varDecl->set_init(std::move(init));
     return decl;
+  } else if (auto* arrdecl = dynamic_cast<cAST::ArrayDecl*>(decl.get())) {
+    return decl;
   } else if (auto* functionDecl = dynamic_cast<cAST::FunctionDecl*>(decl.get())) {
     if (init) {
       throw std::logic_error("FunctionDecl cannot have an initializer");
     }
     return decl;
   } else {
-    throw std::logic_error("Expected VarDecl or FuncDecl in makeInitDecl");
+    throw std::logic_error("Expected VarDecl, ArrDecl or FuncDecl in makeInitDecl");
   }
 }
 
@@ -363,7 +369,6 @@ std::unique_ptr<cAST::Stmt> cAST::Driver::makeForStmt(
   std::unique_ptr<cAST::ASTNode> incr,
   std::unique_ptr<cAST::Stmt> body
 ) {
-  // auto* forStmt = new cAST::ForStmt();
   auto forStmt = std::make_unique<cAST::ForStmt>();
 
   forStmt->set_init(std::move(init));
@@ -371,7 +376,6 @@ std::unique_ptr<cAST::Stmt> cAST::Driver::makeForStmt(
   forStmt->set_increment(std::move(incr));
   forStmt->set_body(std::move(body));
 
-  // return std::unique_ptr<cAST::Stmt>(forStmt);
   return forStmt;
 }
 
@@ -402,6 +406,30 @@ std::unique_ptr<cAST::Expr> cAST::Driver::makeSubscript(std::unique_ptr<cAST::Ex
   node->set_index(std::move(index));
 
   return std::unique_ptr<cAST::Expr>(node);
+}
+
+  // | direct_declarator '[' ']' {
+  //     std::cout << "Parsed array declarator with unspecified size." << std::endl;
+  //     $$ = driver.makeArrayDeclarator(std::move($1), nullptr);
+  //   }
+  // | direct_declarator '[' assignment_expression ']' {
+  //     std::cout << "Parsed array declarator with specified size." << std::endl;
+  //     $$ = driver.makeArrayDeclarator(std::move($1), std::move($3));
+  //   }
+
+std::unique_ptr<cAST::Decl> cAST::Driver::makeArrayDeclarator(std::unique_ptr<cAST::Decl> baseDecl, std::unique_ptr<cAST::Expr> sizeExpr) {
+  auto* arrayDecl = new cAST::ArrayDecl();
+
+  // Set the base declarator
+  if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(baseDecl.get())) {
+    arrayDecl->name = varDecl->name;
+  } else {
+    throw std::logic_error("Base declarator is not a VarDecl for array declarator");
+  }
+
+  arrayDecl->set_sizeExpr(std::move(sizeExpr));
+
+  return std::unique_ptr<cAST::Decl>(arrayDecl);
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args) {

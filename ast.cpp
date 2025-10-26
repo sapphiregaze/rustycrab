@@ -40,6 +40,7 @@ void ReturnStmt::accept(ASTWalker &v){ v.visit(*this); }
 
 // Decl
 void VarDecl::accept(ASTWalker &v){ v.visit(*this); }
+void ArrayDecl::accept(ASTWalker &v){ v.visit(*this); }
 void ParamDecl::accept(ASTWalker &v){ v.visit(*this); }
 void DeclGroup::accept(ASTWalker &v){ v.visit(*this); }
 void FieldDecl::accept(ASTWalker &v){ v.visit(*this); }
@@ -387,6 +388,33 @@ struct Printer : ASTWalker {
       setIndentLevel(indentLevel + 2);
       d.init->accept(*this);
       setIndentLevel(indentLevel - 2);
+    }
+
+    setIndentLevel(indentLevel - 2);
+  }
+
+  void visit(ArrayDecl &d) override {
+    indent();
+    os << "Array Declaration:\n";
+
+    setIndentLevel(indentLevel + 2);
+    auto& specs = *d.specs;
+    indent();
+    os << "Type: ";
+    printSpecs(specs);
+
+    if(!d.name.empty()) os << " " << d.name  << "\n";
+
+    if(d.sizeExpr){
+      indent();
+      os << "Size:\n";
+
+      setIndentLevel(indentLevel + 2);
+      d.sizeExpr->accept(*this);
+      setIndentLevel(indentLevel - 2);
+    } else {
+      indent();
+      os << "Size: unspecified\n";
     }
 
     setIndentLevel(indentLevel - 2);

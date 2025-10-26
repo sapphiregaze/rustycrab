@@ -87,6 +87,8 @@ public:
   std::unique_ptr<cAST::Decl> makeDeclFromSpecs(cAST::DeclSpecs specs);
   std::unique_ptr<cAST::DeclGroup> makeDeclGroupFromSpecsAndInits(cAST::DeclSpecs specs, std::vector<std::unique_ptr<cAST::Decl>> initDecls);
 
+  std::unique_ptr<cAST::Decl> makeArrayDeclarator(std::unique_ptr<cAST::Decl> baseDecl, std::unique_ptr<cAST::Expr> sizeExpr);
+
   cAST::DeclSpecs makeSpecsFromBuiltinType(cAST::BUILTIN_TYPE bt);
   cAST::DeclSpecs makeSpecsFromTypeQual(cAST::TYPE_QUALIFIER tq);
   cAST::DeclSpecs makeSpecsFromStorageClass(cAST::TYPE_STORAGE_QUALIFIER sc);

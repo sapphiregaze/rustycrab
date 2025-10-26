@@ -583,6 +583,25 @@ struct ParamDecl : public Decl {
   void accept(ASTWalker &v) override;
 };
 
+struct ArrayDecl : public Decl {
+  std::string name;
+  std::unique_ptr<TypeNode> baseType;
+  std::unique_ptr<Expr> sizeExpr;
+  std::unique_ptr<DeclSpecs> specs;
+
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
+    specs = std::move(s);
+  }
+  void set_sizeExpr(std::unique_ptr<Expr> s) {
+    sizeExpr = std::move(s);
+  }
+  void set_baseType(std::unique_ptr<TypeNode> b) {
+    baseType = std::move(b);
+  }
+
+  void accept(ASTWalker &v) override;
+};
+
 struct FieldDecl : public Decl {
   std::string name;
   std::unique_ptr<TypeNode> type;
@@ -702,6 +721,7 @@ struct ASTWalker {
 
   // Decl
   virtual void visit(VarDecl&) {}
+  virtual void visit(ArrayDecl&) {}
   virtual void visit(ParamDecl&) {}
   virtual void visit(DeclGroup&) {}
   // virtual void visit(TypedefDecl&) {}
