@@ -281,8 +281,12 @@ declaration_specifiers
       std::cout << "Parsed type specifier in declaration specifiers." << std::endl;
       $$ = std::move(driver.makeSpecsFromBuiltinType($1));
     }
-  | type_qualifier { $$ = driver.makeSpecsFromTypeQual($1); }
-  | storage_class_specifier { $$ = driver.makeSpecsFromStorageClass($1); }
+  | type_qualifier { 
+      $$ = driver.makeSpecsFromTypeQual($1); 
+    }
+  | storage_class_specifier { 
+      $$ = driver.makeSpecsFromStorageClass($1); 
+    }
   /* | declaration_specifiers type_specifier */
   /* | declaration_specifiers type_qualifier */
   /* | declaration_specifiers storage_class_specifier */
@@ -342,7 +346,10 @@ init_declarator
   ;
 
 declarator
-  : direct_declarator { $$ = std::move($1); }
+  : direct_declarator { 
+      std::cout << "Parsed direct declarator" << std::endl;
+      $$ = std::move($1); 
+    }
   /* | pointer direct_declarator { $$ = driver.wrapPointer($2); } */
   ;
 
@@ -360,7 +367,10 @@ direct_declarator
       std::cout << "Parsed function declarator with no parameters." << std::endl;
       $$ = driver.makeFunctionDeclarator(std::move($1), std::vector<std::unique_ptr<cAST::ParamDecl>>{}, false);
     }
-  | direct_declarator '(' parameter_type_list ')' { $$ = driver.makeFunctionDeclarator(std::move($1), std::move($3), false /* no variadic */ ); }
+  | direct_declarator '(' parameter_type_list ')' { 
+      std::cout << "Parsed function declarator with parameters." << std::endl;
+      $$ = driver.makeFunctionDeclarator(std::move($1), std::move($3), false /* no variadic */ ); 
+    }
   ;
 
 parameter_type_list
@@ -369,6 +379,7 @@ parameter_type_list
 
 parameter_list
   : parameter_declaration {
+      std::cout << "Parsed parameter declaration" << std::endl;
       $$ = std::vector<std::unique_ptr<cAST::ParamDecl>>{};
       $$.emplace_back(std::move($1));
     }

@@ -172,7 +172,7 @@ std::unique_ptr<cAST::ParamDecl> cAST::Driver::makeParam(cAST::DeclSpecs specs, 
 
   auto param = new cAST::ParamDecl();
 
-  auto* ident = dynamic_cast<cAST::VarDecl*>(decl->child(0));
+  auto* ident = dynamic_cast<cAST::VarDecl*>(decl.get());
 
   param->name = ident->name;
   // TODO still need to figure out type for param

@@ -409,7 +409,7 @@ struct Printer : ASTWalker {
 
   void visit(ParamDecl &d) override {
     indent();
-    os << "Parameter Declaration:\n";
+    os << "Parameter Declaration: ";
     if(d.type) d.type->accept(*this);
     if(!d.name.empty()) os << " " << d.name;
     if(d.isVariadic) os << " ...";
@@ -437,14 +437,17 @@ struct Printer : ASTWalker {
     indent();
     os << "Function Signature: ";
     printSpecs(d.specs);
-    os << " " << d.name << "(";
+    os << " " << d.name << "\n";
 
-    // TODO this probably looks really bad with formatting, will need to be changed
+    indent();
+    os << "Parameters:\n";
+    setIndentLevel(indentLevel + 2);
     for(size_t i = 0; i < d.params.size(); ++i){
-      if(i) os << ", ";
       auto &p = *d.params[i];
+
       p.accept(*this);
     }
+    setIndentLevel(indentLevel - 2);
 
     if(d.isVariadic){
       if(!d.params.empty()) {
@@ -453,7 +456,7 @@ struct Printer : ASTWalker {
       os << "...";
     }
 
-    os << ")\n";
+    os << "\n";
 
     if(d.body){
       indent();
