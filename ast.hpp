@@ -470,8 +470,21 @@ struct ForStmt : public Stmt {
 };
 struct IfStmt : public Stmt {
   std::unique_ptr<Expr> cond;
-  Stmt* thenBranch;
-  Stmt* elseBranch;
+  std::unique_ptr<Stmt> thenBranch;
+  std::unique_ptr<Stmt> elseBranch;
+  // Stmt* thenBranch;
+  // Stmt* elseBranch;
+
+  void set_condition(std::unique_ptr<Expr> c) {
+    cond = std::move(c);
+  }
+  void set_thenStmt(std::unique_ptr<Stmt> t) {
+    thenBranch = std::move(t);
+  }
+  void set_elseStmt(std::unique_ptr<Stmt> e) {
+    elseBranch = std::move(e);
+  }
+
   void accept(ASTWalker &v) override;
 };
 

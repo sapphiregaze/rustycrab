@@ -48,6 +48,7 @@ public:
   std::unique_ptr<cAST::Expr> makeCond(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Expr> thenExpr, std::unique_ptr<cAST::Expr> elseExpr);
 
   std::unique_ptr<cAST::Expr> makeCast(std::unique_ptr<cAST::TypeNode> type, std::unique_ptr<cAST::Expr> expr);
+  std::unique_ptr<cAST::Stmt> makeIfStmt(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Stmt> thenStmt, std::unique_ptr<cAST::Stmt> elseStmt);
   std::unique_ptr<cAST::Expr> makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer);
   std::unique_ptr<cAST::Expr> makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index);
   std::unique_ptr<cAST::Expr> makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args);

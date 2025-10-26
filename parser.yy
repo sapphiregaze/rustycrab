@@ -79,7 +79,6 @@
 %type <std::vector<std::unique_ptr<cAST::Expr>>>
   argument_expression_list initializer_list
 
-
 %type <std::unique_ptr<cAST::Stmt>>
   statement compound_statement
   block_item expression_statement selection_statement
@@ -114,6 +113,7 @@
 %start translation_unit
 
 %locations
+
 %%
 primary_expression
   : IDENTIFIER { $$ = driver.makeIdentifierExpr($1); }
@@ -428,7 +428,7 @@ statement
       $$ = std::move($1);
     }
   | expression_statement { $$ = std::move($1); }
-  /* | selection_statement { $$ = std::move($1); } */
+  | selection_statement { $$ = std::move($1); }
   /* | iteration_statement { $$ = std::move($1); } */
   | jump_statement { $$ = std::move($1); }
   ;
@@ -472,8 +472,14 @@ expression_statement
   ;
 
 selection_statement
-  : IF '(' expression ')' statement ELSE statement { $$ = driver.makeIf(std::move($3), std::move($5), std::move($7)); }
-  | IF '(' expression ')' statement { $$ = driver.makeIf(std::move($3), std::move($5), nullptr); }
+  : IF '(' expression ')' statement ELSE statement {
+      std::cout << "Parsed if-else selection statement." << std::endl;
+      $$ = driver.makeIfStmt(std::move($3), std::move($5), std::move($7));
+    }
+  | IF '(' expression ')' statement {
+      std::cout << "Parsed if selection statement." << std::endl;
+      $$ = driver.makeIfStmt(std::move($3), std::move($5), nullptr);
+    }
   ;
 
 iteration_statement

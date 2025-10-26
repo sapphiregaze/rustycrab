@@ -328,9 +328,15 @@ std::unique_ptr<cAST::Stmt> cAST::Driver::makeDeclStmt(std::unique_ptr<cAST::Dec
   return std::unique_ptr<cAST::Stmt>(stmt);
 }
 
-// cAST::Expr* cAST::Driver::singleton(std::unique_ptr<cAST::Expr> expr) {
-//   return push_expression(std::move(expr));
-// }
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeIfStmt(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Stmt> thenStmt, std::unique_ptr<cAST::Stmt> elseStmt) {
+  auto* ifStmt = new cAST::IfStmt();
+
+  ifStmt->set_condition(std::move(cond));
+  ifStmt->set_thenStmt(std::move(thenStmt));
+  ifStmt->set_elseStmt(std::move(elseStmt));
+
+  return std::unique_ptr<cAST::Stmt>(ifStmt);
+}
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer) {
   auto* node = new cAST::MemberExpr();
