@@ -338,6 +338,24 @@ std::unique_ptr<cAST::Stmt> cAST::Driver::makeIfStmt(std::unique_ptr<cAST::Expr>
   return std::unique_ptr<cAST::Stmt>(ifStmt);
 }
 
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeWhileStmt(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Stmt> body) {
+  auto* whileStmt = new cAST::WhileStmt();
+
+  whileStmt->set_condition(std::move(cond));
+  whileStmt->set_body(std::move(body));
+
+  return std::unique_ptr<cAST::Stmt>(whileStmt);
+}
+
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeDoWhileStmt(std::unique_ptr<cAST::Stmt> body, std::unique_ptr<cAST::Expr> cond) {
+  auto* doWhileStmt = new cAST::DoWhileStmt();
+
+  doWhileStmt->set_body(std::move(body));
+  doWhileStmt->set_condition(std::move(cond));
+
+  return std::unique_ptr<cAST::Stmt>(doWhileStmt);
+}
+
 std::unique_ptr<cAST::Expr> cAST::Driver::makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer) {
   auto* node = new cAST::MemberExpr();
   node->set_base(std::move(base));

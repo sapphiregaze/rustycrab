@@ -452,12 +452,28 @@ struct CompoundStmt : public Stmt {
 struct WhileStmt : public Stmt {
   std::unique_ptr<Expr> condition;
   std::unique_ptr<Stmt> body;
+
+  void set_condition(std::unique_ptr<Expr> cond) {
+    condition = std::move(cond);
+  }
+  void set_body(std::unique_ptr<Stmt> b) {
+    body = std::move(b);
+  }
+
   void accept(ASTWalker &v) override;
 };
 
 struct DoWhileStmt : public Stmt {
   std::unique_ptr<Stmt> body;
   std::unique_ptr<Expr> condition;
+
+  void set_body(std::unique_ptr<Stmt> b) {
+    body = std::move(b);
+  }
+  void set_condition(std::unique_ptr<Expr> cond) {
+    condition = std::move(cond);
+  }
+
   void accept(ASTWalker &v) override;
 };
 

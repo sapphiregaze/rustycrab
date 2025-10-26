@@ -429,7 +429,7 @@ statement
     }
   | expression_statement { $$ = std::move($1); }
   | selection_statement { $$ = std::move($1); }
-  /* | iteration_statement { $$ = std::move($1); } */
+  | iteration_statement { $$ = std::move($1); }
   | jump_statement { $$ = std::move($1); }
   ;
 
@@ -473,22 +473,28 @@ expression_statement
 
 selection_statement
   : IF '(' expression ')' statement ELSE statement {
-      std::cout << "Parsed if-else selection statement." << std::endl;
       $$ = driver.makeIfStmt(std::move($3), std::move($5), std::move($7));
     }
   | IF '(' expression ')' statement {
-      std::cout << "Parsed if selection statement." << std::endl;
       $$ = driver.makeIfStmt(std::move($3), std::move($5), nullptr);
     }
   ;
 
 iteration_statement
-  : WHILE '(' expression ')' statement { $$ = driver.makeWhile(std::move($3), std::move($5)); }
-  | DO statement WHILE '(' expression ')' ';' { $$ = driver.makeDoWhile(std::move($2), std::move($5)); }
-  | FOR '(' expression_statement expression_statement ')' statement { $$ = driver.makeFor(std::move($3), nullptr, nullptr, std::move($6));}
-  | FOR '(' expression_statement expression_statement expression ')' statement { $$ = driver.makeFor(std::move($3), nullptr, std::move($5), std::move($7)); }
-  | FOR '(' declaration expression_statement ')' statement { $$ = driver.makeFor(std::make_unique<cAST::DeclStmt>(std::move($3)), nullptr, nullptr, std::move($6)); }
-  | FOR '(' declaration expression_statement expression ')' statement { $$ = driver.makeFor(std::make_unique<cAST::DeclStmt>(std::move($3)), nullptr, std::move($5), std::move($7)); }
+  : WHILE '(' expression ')' statement {
+      std::cout << "Parsed WHILE statement." << std::endl;
+      $$ = driver.makeWhileStmt(std::move($3), std::move($5));
+    }
+    // cond, body
+  | DO statement WHILE '(' expression ')' ';' {
+      std::cout << "Parsed DO-WHILE statement." << std::endl;
+      $$ = driver.makeDoWhileStmt(std::move($2), std::move($5));
+    }
+    // body, cond
+  /* | FOR '(' expression_statement expression_statement ')' statement { $$ = driver.makeFor(std::move($3), nullptr, nullptr, std::move($6));} */
+  /* | FOR '(' expression_statement expression_statement expression ')' statement { $$ = driver.makeFor(std::move($3), nullptr, std::move($5), std::move($7)); } */
+  /* | FOR '(' declaration expression_statement ')' statement { $$ = driver.makeFor(std::make_unique<cAST::DeclStmt>(std::move($3)), nullptr, nullptr, std::move($6)); } */
+  /* | FOR '(' declaration expression_statement expression ')' statement { $$ = driver.makeFor(std::make_unique<cAST::DeclStmt>(std::move($3)), nullptr, std::move($5), std::move($7)); } */
   ;
 
 jump_statement

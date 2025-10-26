@@ -500,6 +500,33 @@ struct Printer : ASTWalker {
     setIndentLevel(indentLevel - 2);
   }
 
+  void visit(WhileStmt &s) override {
+    indent();
+    os << "While Statement:\n";
+    os << "while (";
+    if(s.condition) s.condition->accept(*this);
+    os << ") ";
+    if(s.body) {
+      s.body->accept(*this);
+    } else {
+      os << "{}";
+    }
+  }
+
+  void visit(DoWhileStmt &s) override {
+    indent();
+    os << "Do-While Statement:\n";
+    os << "do ";
+    if(s.body) {
+      s.body->accept(*this);
+    } else {
+      os << "{}";
+    }
+    os << " while (";
+    if(s.condition) s.condition->accept(*this);
+    os << ");\n";
+  }
+
   void visit(ConditionalExpr &e) override {
     indent();
     os << "Conditional Expression:\n";
