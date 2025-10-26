@@ -527,6 +527,23 @@ struct Printer : ASTWalker {
     os << ");\n";
   }
 
+  void visit(ForStmt &s) override {
+    indent();
+    os << "For Statement:\n";
+    os << "for (";
+    if(s.init) s.init->accept(*this);
+    os << "; ";
+    if(s.cond) s.cond->accept(*this);
+    os << "; ";
+    if(s.incr) s.incr->accept(*this);
+    os << ") ";
+    if(s.body) {
+      s.body->accept(*this);
+    } else {
+      os << "{}";
+    }
+  }
+
   void visit(ConditionalExpr &e) override {
     indent();
     os << "Conditional Expression:\n";

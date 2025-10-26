@@ -478,12 +478,26 @@ struct DoWhileStmt : public Stmt {
 };
 
 struct ForStmt : public Stmt {
-  std::unique_ptr<Stmt> init;
-  std::unique_ptr<Expr> cond;
-  std::unique_ptr<Expr> incr;
+  std::unique_ptr<ASTNode> init;
+  std::unique_ptr<ASTNode> cond;
+  std::unique_ptr<ASTNode> incr;
   std::unique_ptr<Stmt> body;
+
+  void set_init(std::unique_ptr<ASTNode> i) {
+    init = std::move(i);
+  }
+  void set_condition(std::unique_ptr<ASTNode> c) {
+    cond = std::move(c);
+  }
+  void set_increment(std::unique_ptr<ASTNode> i) {
+    incr = std::move(i);
+  }
+  void set_body(std::unique_ptr<Stmt> b) {
+    body = std::move(b);
+  }
   void accept(ASTWalker &v) override;
 };
+
 struct IfStmt : public Stmt {
   std::unique_ptr<Expr> cond;
   std::unique_ptr<Stmt> thenBranch;

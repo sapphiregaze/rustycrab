@@ -275,11 +275,12 @@ cAST::DeclSpecs cAST::Driver::makeSpecsFromStorageClass(cAST::TYPE_STORAGE_QUALI
   return specs;
 }
 
-cAST::Decl* cAST::Driver::makeDeclFromSpecs(cAST::DeclSpecs specs) {
+std::unique_ptr<cAST::Decl> cAST::Driver::makeDeclFromSpecs(cAST::DeclSpecs specs) {
   auto* decl = new cAST::VarDecl();
   decl->set_specs(std::make_unique<cAST::DeclSpecs>(std::move(specs)));
 
-  return static_cast<cAST::Decl*>(decl);
+  // return static_cast<cAST::Decl*>(decl);
+  return std::unique_ptr<cAST::Decl>(decl);
 }
 
 std::unique_ptr<cAST::DeclGroup> cAST::Driver::makeDeclGroupFromSpecsAndInits(cAST::DeclSpecs specs, std::vector<std::unique_ptr<cAST::Decl>> initDecls) {
@@ -354,6 +355,24 @@ std::unique_ptr<cAST::Stmt> cAST::Driver::makeDoWhileStmt(std::unique_ptr<cAST::
   doWhileStmt->set_condition(std::move(cond));
 
   return std::unique_ptr<cAST::Stmt>(doWhileStmt);
+}
+
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeForStmt(
+  std::unique_ptr<cAST::ASTNode> init,
+  std::unique_ptr<cAST::ASTNode> cond,
+  std::unique_ptr<cAST::ASTNode> incr,
+  std::unique_ptr<cAST::Stmt> body
+) {
+  // auto* forStmt = new cAST::ForStmt();
+  auto forStmt = std::make_unique<cAST::ForStmt>();
+
+  forStmt->set_init(std::move(init));
+  forStmt->set_condition(std::move(cond));
+  forStmt->set_increment(std::move(incr));
+  forStmt->set_body(std::move(body));
+
+  // return std::unique_ptr<cAST::Stmt>(forStmt);
+  return forStmt;
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer) {

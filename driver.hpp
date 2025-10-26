@@ -53,6 +53,12 @@ public:
   std::unique_ptr<cAST::Stmt> makeWhileStmt(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Stmt> body);
   std::unique_ptr<cAST::Stmt> makeDoWhileStmt(std::unique_ptr<cAST::Stmt> body, std::unique_ptr<cAST::Expr> cond);
 
+  std::unique_ptr<cAST::Stmt> makeForStmt(
+    std::unique_ptr<cAST::ASTNode> init,
+    std::unique_ptr<cAST::ASTNode> cond,
+    std::unique_ptr<cAST::ASTNode> incr,
+    std::unique_ptr<cAST::Stmt> body
+  );
   std::unique_ptr<cAST::Expr> makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer);
   std::unique_ptr<cAST::Expr> makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index);
   std::unique_ptr<cAST::Expr> makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args);
@@ -78,7 +84,7 @@ public:
   std::unique_ptr<cAST::Decl> makeIdentDeclarator(const std::string& name);
   std::unique_ptr<cAST::Decl> makeInitDecl(std::unique_ptr<cAST::Decl> decl, std::unique_ptr<cAST::Expr> init);
 
-  cAST::Decl* makeDeclFromSpecs(cAST::DeclSpecs specs);
+  std::unique_ptr<cAST::Decl> makeDeclFromSpecs(cAST::DeclSpecs specs);
   std::unique_ptr<cAST::DeclGroup> makeDeclGroupFromSpecsAndInits(cAST::DeclSpecs specs, std::vector<std::unique_ptr<cAST::Decl>> initDecls);
 
   cAST::DeclSpecs makeSpecsFromBuiltinType(cAST::BUILTIN_TYPE bt);
