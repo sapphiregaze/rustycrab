@@ -1,51 +1,69 @@
 {
-  description = "A Nix-flake-based Rust development environment";
+  description = "A template for Nix based C++ project setup.";
 
   inputs = {
-    nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    # Pointing to the current stable release of nixpkgs. You can
+    # customize this to point to an older version or unstable if you
+    # like everything shining.
+    #
+    # E.g.
+    #
+    # nixpkgs.url = "github:NixOS/nixpkgs/unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/23.05";
+
+    utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = inputs:
-    let
-      supportedSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
-      forEachSupportedSystem = f: inputs.nixpkgs.lib.genAttrs supportedSystems (system: f {
-        pkgs = import inputs.nixpkgs {
-          inherit system;
-          overlays = [
-            inputs.rust-overlay.overlays.default
-            inputs.self.overlays.default
-          ];
-        };
-      });
-    in
-    {
-      overlays.default = final: prev: {
-        rustToolchain = final.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-      };
+  outputs = { self, nixpkgs, ... }@inputs: inputs.utils.lib.eachSystem [
+    # Add the system/architecture you would like to support here. Note that not
+    # all packages in the official nixpkgs support all platforms.
+    "x86_64-linux" "i686-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"
+  ] (system: let
+    pkgs = import nixpkgs {
+      inherit system;
 
-      devShells = forEachSupportedSystem ({ pkgs }: {
-        default = pkgs.mkShell {
-          packages = with pkgs; [
-            rustToolchain
-            openssl
-            pkg-config
-            cargo-deny
-            cargo-edit
-            cargo-watch
-            rust-analyzer
-            mold
-            lldb
-          ];
-
-          env = {
-            # Required by rust-analyzer
-            RUST_SRC_PATH = "${pkgs.rustToolchain}/lib/rustlib/src/rust/library";
-          };
-        };
-      });
+      # Add overlays here if you need to override the nixpkgs
+      # official packages.
+      overlays = [];
+      
+      # Uncomment this if you need unfree software (e.g. cuda) for
+      # your project.
+      #
+      # config.allowUnfree = true;
     };
+  in {
+    devShells.default = pkgs.mkShell rec {
+      # Update the name to something that suites your project.
+      name = "my-c++-project";
+
+      packages = with pkgs; [
+        # Development Tools
+        llvmPackages_14.clang
+        cmake
+        cmakeCurses
+        help2man
+        automake
+        m4
+        flex
+        bison
+
+        # Development time dependencies
+        gtest
+
+        # Build time and Run time dependencies
+        spdlog
+        abseil-cpp
+      ];
+
+      # Setting up the environment variables you need during
+      # development.
+      shellHook = let
+        icon = "f121";
+      in ''
+        export PS1="$(echo -e '\u${icon}') {\[$(tput sgr0)\]\[\033[38;5;228m\]\w\[$(tput sgr0)\]\[\033[38;5;15m\]} (${name}) \\$ \[$(tput sgr0)\]"
+      '';
+    };
+
+    packages.default = pkgs.callPackage ./default.nix {};
+  });
 }

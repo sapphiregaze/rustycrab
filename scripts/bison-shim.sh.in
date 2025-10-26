@@ -1,0 +1,2 @@
+#!/bin/sh
+${CMAKE_COMMAND} -E env BISON_PKGDATADIR=${CMAKE_BINARY_DIR}/bison_fetch-prefix/src/bison_fetch/data ${BISON_EXECUTABLE} $@
