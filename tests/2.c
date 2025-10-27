@@ -1,9 +1,12 @@
+// forward decl
+void test(int param1, int param2);
+
 void main () {
   int x = 5;
   int b, c = 3;
   float a;
   a = x;
-  test();
+  test(a, b);
 
   // If statement tests
 
@@ -45,4 +48,11 @@ void main () {
   int arr[5];
   arr[0] = 10;
 
+  // Casting tests
+
+  a = (float)x;
+}
+
+void test(int param1, int param2) {
+  return param1 + param2;
 }

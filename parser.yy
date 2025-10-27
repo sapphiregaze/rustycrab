@@ -119,7 +119,7 @@ primary_expression
   : IDENTIFIER { $$ = driver.makeIdentifierExpr($1); }
   | constant { $$ = std::move($1); }
   | string { $$ = std::move($1); }
-  /* | '(' expression ')' { $$ = std::move($2); } */
+  | '(' expression ')' { $$ = std::move($2); }
   ;
 
 constant
