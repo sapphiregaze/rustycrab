@@ -159,8 +159,8 @@ argument_expression_list
 
 unary_expression
   : postfix_expression { $$ = std::move($1); }
-  /* | INC_OP unary_expression { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::PRE_INC, std::move($2)); } */
-  /* | DEC_OP unary_expression { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::PRE_DEC, std::move($2)); } */
+  | INC_OP unary_expression { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::PRE_INC, std::move($2)); }
+  | DEC_OP unary_expression { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::PRE_DEC, std::move($2)); }
   /* | unary_operator cast_expression { $$ = driver.makeUnary($1, $2); } */
   /* | SIZEOF unary_expression                      { make it a builtin unary if you model it$$ = driver.makeUnary(AST::UnaryOp::SizeofExpr custom, std::move($2), @1); } */
   /* | SIZEOF '(' type_name ')'                     { $$ = driver.makeCast(sizeof-type as expr std::move($3), nullptr, @1); or a dedicated node } */
