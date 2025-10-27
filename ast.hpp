@@ -655,6 +655,7 @@ struct ArrayDecl : public Decl {
 struct PointerDecl : public Decl {
   std::unique_ptr<Decl> baseDecl;
   std::unique_ptr<DeclSpecs> specs;
+  std::unique_ptr<Expr> init;
 
   void set_baseDecl(std::unique_ptr<Decl> b) {
     baseDecl = std::move(b);

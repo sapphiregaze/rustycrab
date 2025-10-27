@@ -330,8 +330,7 @@ std::unique_ptr<cAST::Decl> cAST::Driver::makeInitDecl(std::unique_ptr<cAST::Dec
     return decl;
 
   } else if (auto* pointerDecl = dynamic_cast<cAST::PointerDecl*>(decl.get())) {
-    // pointerDecl->set_baseDecl(std::move(decl));
-    // return std::unique_ptr<cAST::Decl>(pointerDecl);
+    pointerDecl->init = std::move(init);
     return decl;
 
   } else if (auto* functionDecl = dynamic_cast<cAST::FunctionDecl*>(decl.get())) {

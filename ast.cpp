@@ -451,7 +451,22 @@ struct Printer : ASTWalker {
       printSpecs(specs);
       os << "\n";
     }
-    if(d.baseDecl) d.baseDecl->accept(*this);
+
+    if(d.init){
+      indent();
+      os << "Value:\n";
+      setIndentLevel(indentLevel + 2);
+      d.init->accept(*this);
+      setIndentLevel(indentLevel - 2);
+    }
+
+    if(d.baseDecl) {
+      indent();
+      os << "Declaration:\n";
+      setIndentLevel(indentLevel + 2);
+      d.baseDecl->accept(*this);
+      setIndentLevel(indentLevel - 2);
+    }
 
     setIndentLevel(indentLevel - 2);
   }
