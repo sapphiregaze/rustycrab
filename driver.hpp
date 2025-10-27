@@ -95,8 +95,13 @@ public:
   cAST::DeclSpecs makeSpecsFromTypeNode(std::unique_ptr<cAST::TypeNode> type);
   cAST::DeclSpecs combineSpecs(cAST::DeclSpecs a, cAST::DeclSpecs b);
 
-  void dump_ast(std::ostream& os);
+  std::vector<std::tuple<int, int, std::string>> error_log_;
+  bool had_error_ = false;
 
+  void report_unimplemented_feature(const std::string& feature, const cAST::cASTParser::location_type& loc);
+  void report_error(int line, int column, const std::string& message);
+  void dump_ast(std::ostream& os);
+  void dump_errors(std::ostream& os);
   bool had_error() const { return had_error_; }
 
 private:
@@ -107,7 +112,6 @@ private:
   cAST::TranslationUnit* head_ = nullptr;
   std::vector<cAST::ASTNode*> parent_stack_;
   std::string source_name_;
-  bool had_error_ = false;
 };
 
 } // namespace cAST

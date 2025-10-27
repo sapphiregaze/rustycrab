@@ -57,8 +57,7 @@ void cAST::Driver::parse_helper( std::istream &stream ){
   const int rc = parser->parse();
   if( rc != accept ) {
     std::cerr << "Parse failed with code: " << rc << std::endl;
-    had_error_ = true;
-    // dump_diagnostics( std::cerr );
+    exit( EXIT_FAILURE );
   }
   return;
 }
@@ -408,15 +407,6 @@ std::unique_ptr<cAST::Expr> cAST::Driver::makeSubscript(std::unique_ptr<cAST::Ex
   return std::unique_ptr<cAST::Expr>(node);
 }
 
-  // | direct_declarator '[' ']' {
-  //     std::cout << "Parsed array declarator with unspecified size." << std::endl;
-  //     $$ = driver.makeArrayDeclarator(std::move($1), nullptr);
-  //   }
-  // | direct_declarator '[' assignment_expression ']' {
-  //     std::cout << "Parsed array declarator with specified size." << std::endl;
-  //     $$ = driver.makeArrayDeclarator(std::move($1), std::move($3));
-  //   }
-
 std::unique_ptr<cAST::Decl> cAST::Driver::makeArrayDeclarator(std::unique_ptr<cAST::Decl> baseDecl, std::unique_ptr<cAST::Expr> sizeExpr) {
   auto* arrayDecl = new cAST::ArrayDecl();
 
@@ -463,9 +453,28 @@ cAST::DeclSpecs cAST::Driver::combineSpecs(cAST::DeclSpecs a, cAST::DeclSpecs b)
   return combined;
 }
 
+void cAST::Driver::report_unimplemented_feature(const std::string& feature, const cAST::cASTParser::location_type& loc){
+  std::cerr << "Unimplemented feature: " << feature << " at " << loc.begin.line << ":" << loc.begin.column << " to " << loc.end.line << ":" << loc.end.column << std::endl;
+}
+
+void cAST::Driver::report_error(int line, int column, const std::string& message){
+  error_log_.push_back(std::make_tuple(line, column, message));
+  std::cerr << "Error at " << line << ":" << column << " - " << message << std::endl;
+  had_error_ = true;
+}
+
 void cAST::Driver::dump_ast(std::ostream& os) {
   if (!head_) {
     os << "<no AST>\n"; return;
   }
   cAST::prettyprint(*head_, os);
+}
+
+void cAST::Driver::dump_errors(std::ostream& os) {
+  if (error_log_.empty()) {
+    os << "<no errors>\n"; return;
+  }
+  for (const auto& [line, column, message] : error_log_) {
+    os << "Error at " << line << ":" << column << " - " << message << "\n";
+  }
 }

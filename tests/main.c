@@ -1,5 +1,7 @@
 // forward decl
 void test(int param1, int param2);
+// pass by pointer
+// void test2(int *arr, int size);
 
 void main () {
   int x = 5;
@@ -56,3 +58,9 @@ void main () {
 void test(int param1, int param2) {
   return param1 + param2;
 }
+
+// void test2(int *arr, int size) {
+//   for(int i = 0; i < size; i = i + 1) {
+//     arr[i] = i;
+//   }
+// }
