@@ -141,10 +141,10 @@ postfix_expression
     }
   | postfix_expression '(' ')' { $$ = driver.makeCall(std::move($1), {}); }
   | postfix_expression '(' argument_expression_list ')' { $$ = driver.makeCall(std::move($1), std::move($3)); }
-  /* | postfix_expression '.' IDENTIFIER { $$ = driver.makeMember(std::move($1), *$3, false); } */
-  /* | postfix_expression PTR_OP IDENTIFIER { $$ = driver.makeMember(std::move($1), *$3, true); } */
-  /* | postfix_expression INC_OP { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::POST_INC, std::move($1)); } */
-  /* | postfix_expression DEC_OP { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::POST_DEC, std::move($1)); } */
+  | postfix_expression '.' IDENTIFIER { $$ = driver.makeMember(std::move($1), $3, false); }
+  | postfix_expression PTR_OP IDENTIFIER { $$ = driver.makeMember(std::move($1), $3, true); }
+  | postfix_expression INC_OP { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::POST_INC, std::move($1)); }
+  | postfix_expression DEC_OP { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::POST_DEC, std::move($1)); }
   ;
 
 argument_expression_list

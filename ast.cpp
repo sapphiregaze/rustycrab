@@ -200,8 +200,8 @@ struct Printer : ASTWalker {
 
   void visit(UnaryExpr &e) override {
     switch(e.op){
-      case UNARY_OPERATOR::INCREMENT: if(e.operand){ e.operand->accept(*this); os << "++";} break;
-      case UNARY_OPERATOR::DECREMENT: if(e.operand){ e.operand->accept(*this); os << "--";} break;
+      case UNARY_OPERATOR::POST_INC: if(e.operand){ e.operand->accept(*this); os << "++";} break;
+      case UNARY_OPERATOR::POST_DEC: if(e.operand){ e.operand->accept(*this); os << "--";} break;
       case UNARY_OPERATOR::PRE_INC: os << "++"; if(e.operand) e.operand->accept(*this); break;
       case UNARY_OPERATOR::PRE_DEC: os << "--"; if(e.operand) e.operand->accept(*this); break;
       case UNARY_OPERATOR::ADDRESS_OF: os << "&"; if(e.operand) e.operand->accept(*this); break;

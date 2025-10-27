@@ -1,7 +1,11 @@
-void main(int x) {
+void main(int x, float a) {
 	int x = 5, b, c = 3;
 	float a;
 	a = (float) x;
+
+	for (int i = 0 ; i < 5; i++) {
+		doSomething(i);
+	}
 
 	test("hello!");
 }
