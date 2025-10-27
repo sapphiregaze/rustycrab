@@ -338,22 +338,40 @@ init_declarator
 
 declarator
   : direct_declarator { $$ = std::move($1); }
-  /* | pointer direct_declarator { $$ = driver.wrapPointer(std::move($2)); } */
-  | '*' direct_declarator {
-      $$ = driver.wrapPointer(std::move($2));
+  | pointer direct_declarator { 
+      auto* leaf = dynamic_cast<cAST::PointerDecl*>($1.get());
+
+      // work down to the inner most pointer
+      while (leaf->baseDecl) {
+        if (auto* innerPtr = dynamic_cast<cAST::PointerDecl*>(leaf->baseDecl.get())) {
+          leaf = innerPtr;
+        } else {
+          break;
+        }
+      }
+
+      // assign the direct_declarator to the inner most pointer
+      leaf->baseDecl = std::move($2);
+      $$ = std::move($1);
     }
   ;
 
-/* pointer */
-  /* : '*' { $$ = driver.makeBasePointerDecl();  base pointer declaration} */
-  /* | '*' pointer { $$ = driver.wrapPointer(std::move($2)); } */
-  /* | '*' type_qualifier pointer { driver.report_unimplemented_feature("pointer with type qualifier", @1); } */
-  /* | '*' type_qualifier { driver.report_unimplemented_feature("pointer with type qualifier", @1); } */
-  /* ; */
+pointer
+  : '*' { 
+      // create a new PointerDecl node that will be filled in by the calling parse rule
+      auto* ptr_decl = new cAST::PointerDecl();
+      $$ = std::unique_ptr<cAST::PointerDecl>(ptr_decl);
+    }
+  | '*' pointer { 
+      $$ = driver.wrapPointer(std::move($2));
+    }
+  | '*' type_qualifier pointer { driver.report_unimplemented_feature("pointer with type qualifier", @1); }
+  | '*' type_qualifier { driver.report_unimplemented_feature("pointer with type qualifier", @1); }
+  ;
 
 direct_declarator
   : IDENTIFIER { $$ = driver.makeIdentDeclarator($1); }
-  /* | '(' declarator ')' { $$ = std::move($2); } */
+  | '(' declarator ')' { $$ = std::move($2); }
   | direct_declarator '(' ')' {
       $$ = driver.makeFunctionDeclarator(std::move($1), std::vector<std::unique_ptr<cAST::ParamDecl>>{}, false);
     }

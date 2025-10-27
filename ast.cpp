@@ -393,8 +393,10 @@ struct Printer : ASTWalker {
       indent();
       os << "Type: ";
       printSpecs(specs);
+      os << "\n";
     }
-    if(!d.name.empty()) os << " " << d.name  << "\n";
+    indent();
+    if(!d.name.empty()) os << "Name: " << d.name  << "\n";
 
     if(d.init){
       indent();
@@ -447,6 +449,7 @@ struct Printer : ASTWalker {
       indent();
       os << "Type: ";
       printSpecs(specs);
+      os << "\n";
     }
     if(d.baseDecl) d.baseDecl->accept(*this);
 

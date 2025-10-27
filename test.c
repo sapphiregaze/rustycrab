@@ -7,5 +7,7 @@ void main(int x, float a) {
 		doSomething(i);
 	}
 
+	int** ptr = &x;
+
 	test("hello!");
 }
