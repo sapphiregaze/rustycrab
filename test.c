@@ -3,7 +3,7 @@ void main(int x, float a) {
 	float a;
 	a = (float) x;
 
-	for (int i = 0 ; i < 5; ++i) {
+	for (int i = 0 ; i < 5; ++((double) i)) {
 		doSomething(i);
 	}
 
