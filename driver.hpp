@@ -36,7 +36,7 @@ public:
 
   void ensure_root();
 
-  cAST::TypeNode* makeBuiltinType(cAST::BUILTIN_TYPE bt);
+  std::unique_ptr<cAST::TypeNode> makeBuiltinType(cAST::BUILTIN_TYPE bt);
 
   std::unique_ptr<cAST::Expr> makeBinary(cAST::BINARY_OPERATOR op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right);
   std::unique_ptr<cAST::Expr> makeUnary(cAST::UNARY_OPERATOR op, std::unique_ptr<cAST::Expr> expr);
@@ -48,6 +48,17 @@ public:
   std::unique_ptr<cAST::Expr> makeCond(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Expr> thenExpr, std::unique_ptr<cAST::Expr> elseExpr);
 
   std::unique_ptr<cAST::Expr> makeCast(std::unique_ptr<cAST::TypeNode> type, std::unique_ptr<cAST::Expr> expr);
+  std::unique_ptr<cAST::Stmt> makeIfStmt(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Stmt> thenStmt, std::unique_ptr<cAST::Stmt> elseStmt);
+
+  std::unique_ptr<cAST::Stmt> makeWhileStmt(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Stmt> body);
+  std::unique_ptr<cAST::Stmt> makeDoWhileStmt(std::unique_ptr<cAST::Stmt> body, std::unique_ptr<cAST::Expr> cond);
+
+  std::unique_ptr<cAST::Stmt> makeForStmt(
+    std::unique_ptr<cAST::ASTNode> init,
+    std::unique_ptr<cAST::ASTNode> cond,
+    std::unique_ptr<cAST::ASTNode> incr,
+    std::unique_ptr<cAST::Stmt> body
+  );
   std::unique_ptr<cAST::Expr> makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer);
   std::unique_ptr<cAST::Expr> makeSubscript(std::unique_ptr<cAST::Expr> base, std::unique_ptr<cAST::Expr> index);
   std::unique_ptr<cAST::Expr> makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args);
@@ -55,7 +66,6 @@ public:
   std::unique_ptr<cAST::Stmt> makeExprStmt(std::unique_ptr<cAST::Expr> expr);
   std::unique_ptr<cAST::Stmt> makeDeclStmt(std::unique_ptr<cAST::Decl> decl);
   std::unique_ptr<cAST::Stmt> makeNullStmt();
-
   std::unique_ptr<cAST::Stmt> makeCompoundStmt(std::vector<std::unique_ptr<cAST::Stmt>> stmts);
 
   std::unique_ptr<cAST::Stmt> makeContinue();
@@ -73,8 +83,12 @@ public:
   std::unique_ptr<cAST::Decl> makeIdentDeclarator(const std::string& name);
   std::unique_ptr<cAST::Decl> makeInitDecl(std::unique_ptr<cAST::Decl> decl, std::unique_ptr<cAST::Expr> init);
 
-  cAST::Decl* makeDeclFromSpecs(cAST::DeclSpecs specs);
+  std::unique_ptr<cAST::PointerDecl> wrapPointer(std::unique_ptr<cAST::Decl> baseDecl);
+
+  std::unique_ptr<cAST::Decl> makeDeclFromSpecs(cAST::DeclSpecs specs);
   std::unique_ptr<cAST::DeclGroup> makeDeclGroupFromSpecsAndInits(cAST::DeclSpecs specs, std::vector<std::unique_ptr<cAST::Decl>> initDecls);
+
+  std::unique_ptr<cAST::Decl> makeArrayDeclarator(std::unique_ptr<cAST::Decl> baseDecl, std::unique_ptr<cAST::Expr> sizeExpr);
 
   cAST::DeclSpecs makeSpecsFromBuiltinType(cAST::BUILTIN_TYPE bt);
   cAST::DeclSpecs makeSpecsFromTypeQual(cAST::TYPE_QUALIFIER tq);
@@ -82,8 +96,13 @@ public:
   cAST::DeclSpecs makeSpecsFromTypeNode(std::unique_ptr<cAST::TypeNode> type);
   cAST::DeclSpecs combineSpecs(cAST::DeclSpecs a, cAST::DeclSpecs b);
 
-  void dump_ast(std::ostream& os);
+  std::vector<std::tuple<int, int, std::string>> error_log_;
+  bool had_error_ = false;
 
+  void report_unimplemented_feature(const std::string& feature, const cAST::cASTParser::location_type& loc);
+  void report_error(int line, int column, const std::string& message);
+  void dump_ast(std::ostream& os);
+  void dump_errors(std::ostream& os);
   bool had_error() const { return had_error_; }
 
 private:
@@ -94,7 +113,6 @@ private:
   cAST::TranslationUnit* head_ = nullptr;
   std::vector<cAST::ASTNode*> parent_stack_;
   std::string source_name_;
-  bool had_error_ = false;
 };
 
 } // namespace cAST

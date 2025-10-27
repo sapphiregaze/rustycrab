@@ -1,4 +1,5 @@
 #include "driver.hpp"
+#include <typeinfo>
 #include <iostream>
 #include <cctype>
 #include <fstream>
@@ -57,8 +58,7 @@ void cAST::Driver::parse_helper( std::istream &stream ){
   const int rc = parser->parse();
   if( rc != accept ) {
     std::cerr << "Parse failed with code: " << rc << std::endl;
-    had_error_ = true;
-    // dump_diagnostics( std::cerr );
+    exit( EXIT_FAILURE );
   }
   return;
 }
@@ -73,11 +73,11 @@ void cAST::Driver::ensure_root() {
   }
 }
 
-cAST::TypeNode* cAST::Driver::makeBuiltinType(cAST::BUILTIN_TYPE bt) {
+std::unique_ptr<cAST::TypeNode> cAST::Driver::makeBuiltinType(cAST::BUILTIN_TYPE bt) {
   auto* type = new cAST::BuiltinType();
   type->set_type(bt);
 
-  return static_cast<cAST::TypeNode*>(type);
+  return std::unique_ptr<cAST::TypeNode>(type);
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeUnary(cAST::UNARY_OPERATOR op, std::unique_ptr<cAST::Expr> expr) {
@@ -110,8 +110,6 @@ std::unique_ptr<cAST::Expr> cAST::Driver::makeCond(std::unique_ptr<cAST::Expr> c
   condExpr->set_cond(std::move(cond));
   condExpr->set_thenExpr(std::move(thenExpr));
   condExpr->set_elseExpr(std::move(elseExpr));
-
-  // return static_cast<cAST::Expr*>(condExpr);
   return std::unique_ptr<cAST::Expr>(condExpr);
 }
 
@@ -128,7 +126,6 @@ std::unique_ptr<cAST::Decl> cAST::Driver::makeFunctionDeclarator(
   bool isVariadic
 ) {
   auto* funcDecl = new cAST::FunctionDecl();
-  // Set the base declarator (e.g., the function name)
   if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(baseDecl.get())) {
     funcDecl->name = varDecl->name;
   } else {
@@ -138,6 +135,14 @@ std::unique_ptr<cAST::Decl> cAST::Driver::makeFunctionDeclarator(
   funcDecl->isVariadic = isVariadic;
 
   return std::unique_ptr<cAST::Decl>(funcDecl);
+}
+
+std::unique_ptr<cAST::PointerDecl> cAST::Driver::wrapPointer(std::unique_ptr<cAST::Decl> baseDecl){
+  // auto pointerDecl = std::make_unique<cAST::PointerDecl>();
+  auto* pointerDecl = new cAST::PointerDecl();
+  pointerDecl->set_baseDecl(std::move(baseDecl));
+  // return pointerDecl;
+  return std::unique_ptr<cAST::PointerDecl>(pointerDecl);
 }
 
 cAST::Decl* cAST::Driver::makeFunctionDefinition(
@@ -150,17 +155,15 @@ cAST::Decl* cAST::Driver::makeFunctionDefinition(
 
   // TODO it seems like this will always lead to a previous function declaration found
   if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(baseDecl.get())) {
-    std::cout << "Function name from VarDecl: " << varDecl->name << std::endl;
     funcDecl->name = varDecl->name;
   } else if (auto* prevFnDecl = dynamic_cast<cAST::FunctionDecl*>(baseDecl.get())) {
-    std::cout << "Previous function declaration found: " << prevFnDecl->name << std::endl;
     funcDecl->name = prevFnDecl->name;
     funcDecl->set_params(std::move(prevFnDecl->params));
   } else {
     throw std::logic_error("Base declarator is not a VarDecl or FunctionDecl for function definition");
   }
 
-  funcDecl->set_specs(specs);
+  funcDecl->set_specs(std::make_unique<DeclSpecs>(specs));
   funcDecl->set_body(std::move(body));
   // funcDecl->isVariadic = isVariadic;
 
@@ -168,26 +171,27 @@ cAST::Decl* cAST::Driver::makeFunctionDefinition(
 }
 
 std::unique_ptr<cAST::ParamDecl> cAST::Driver::makeParam(cAST::DeclSpecs specs, std::unique_ptr<cAST::Decl> decl) {
-  cAST::ASTNode* parent = head();
+  auto param = std::make_unique<cAST::ParamDecl>();
+  if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(decl.get())) {
+    param->set_paramDecl(std::move(decl));
+    param->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
+  } else if (auto* ptrDecl = dynamic_cast<cAST::PointerDecl*>(decl.get())) {
+    param->set_paramDecl(std::move(decl));
+    param->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
+  } else {
+    throw std::logic_error("Decl provided to makeParam is not a VarDecl or a PointerDecl");
+  }
 
-  auto param = new cAST::ParamDecl();
-  auto* ident = dynamic_cast<cAST::VarDecl*>(decl.get());
-  auto* type = new cAST::BuiltinType();
-
-  param->name = ident->name;
-
-  // TODO i'm worried that there is some other information that needs to be contained in type
-  type->set_type(specs.type);
-  param->type = std::unique_ptr<cAST::BuiltinType>(type);
-
-  return std::unique_ptr<cAST::ParamDecl>(param);
+  return param;
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeIdentifierExpr(const std::string& name) {
-  auto* ident = new cAST::IdentifierExpr();
+  // auto* ident = new cAST::IdentifierExpr();
+  auto ident = std::make_unique<cAST::IdentifierExpr>();
   ident->set_name(name);
 
-  return std::unique_ptr<cAST::Expr>(ident);
+  // return std::unique_ptr<cAST::Expr>(ident);
+  return ident;
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeConstantIntExpr(int value) {
@@ -275,11 +279,12 @@ cAST::DeclSpecs cAST::Driver::makeSpecsFromStorageClass(cAST::TYPE_STORAGE_QUALI
   return specs;
 }
 
-cAST::Decl* cAST::Driver::makeDeclFromSpecs(cAST::DeclSpecs specs) {
+std::unique_ptr<cAST::Decl> cAST::Driver::makeDeclFromSpecs(cAST::DeclSpecs specs) {
   auto* decl = new cAST::VarDecl();
   decl->set_specs(std::make_unique<cAST::DeclSpecs>(std::move(specs)));
 
-  return static_cast<cAST::Decl*>(decl);
+  // return static_cast<cAST::Decl*>(decl);
+  return std::unique_ptr<cAST::Decl>(decl);
 }
 
 std::unique_ptr<cAST::DeclGroup> cAST::Driver::makeDeclGroupFromSpecsAndInits(cAST::DeclSpecs specs, std::vector<std::unique_ptr<cAST::Decl>> initDecls) {
@@ -289,16 +294,25 @@ std::unique_ptr<cAST::DeclGroup> cAST::Driver::makeDeclGroupFromSpecsAndInits(cA
   for (auto& decl : initDecls) {
     if (auto* varDeclRaw = dynamic_cast<VarDecl*>(decl.get())) {
       auto varDecl(static_cast<VarDecl*>(decl.release()));
-
       varDecl->set_specs(std::make_unique<DeclSpecs>(specs));
       decls.push_back(std::unique_ptr<cAST::Decl>(varDecl)); // TODO this hints at the fact that maybe all pointers should be smart pointers?
+
+    } else if (auto* arrdecl = dynamic_cast<cAST::ArrayDecl*>(decl.get())) {
+      arrdecl->set_specs(std::make_unique<DeclSpecs>(specs));
+      decls.push_back(std::move(decl));
+
+    } else if (auto* pointerDecl = dynamic_cast<cAST::PointerDecl*>(decl.get())) {
+      pointerDecl->set_specs(std::make_unique<DeclSpecs>(specs));
+      decls.push_back(std::move(decl));
+
     } else if (auto* functionDeclRaw = dynamic_cast<FunctionDecl*>(decl.get())) {
       auto functionDecl(static_cast<FunctionDecl*>(decl.release()));
-
-      functionDecl->set_specs(specs);
+      // functionDecl->set_specs(specs);
+      functionDecl->set_specs(std::make_unique<DeclSpecs>(specs));
       decls.push_back(std::unique_ptr<cAST::Decl>(functionDecl)); // TODO this hints at the fact that maybe all pointers should be smart pointers?
-    } else {
-      throw std::logic_error("Expected VarDecl or FuncDecl in initDecls");
+    }
+    else {
+      throw std::logic_error("Expected VarDecl, ArrayDecl, PointerDecl or FuncDecl in makeDeclGroupFromSpecsAndInits");
     }
   }
 
@@ -311,13 +325,23 @@ std::unique_ptr<cAST::Decl> cAST::Driver::makeInitDecl(std::unique_ptr<cAST::Dec
   if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(decl.get())) {
     varDecl->set_init(std::move(init));
     return decl;
+
+  } else if (auto* arrdecl = dynamic_cast<cAST::ArrayDecl*>(decl.get())) {
+    return decl;
+
+  } else if (auto* pointerDecl = dynamic_cast<cAST::PointerDecl*>(decl.get())) {
+    pointerDecl->init = std::move(init);
+    return decl;
+
   } else if (auto* functionDecl = dynamic_cast<cAST::FunctionDecl*>(decl.get())) {
     if (init) {
       throw std::logic_error("FunctionDecl cannot have an initializer");
     }
     return decl;
-  } else {
-    throw std::logic_error("Expected VarDecl or FuncDecl in makeInitDecl");
+
+  }
+  else {
+    throw std::logic_error("Expected VarDecl, ArrDecl, PointerDecl or FuncDecl in makeInitDecl");
   }
 }
 
@@ -328,9 +352,49 @@ std::unique_ptr<cAST::Stmt> cAST::Driver::makeDeclStmt(std::unique_ptr<cAST::Dec
   return std::unique_ptr<cAST::Stmt>(stmt);
 }
 
-// cAST::Expr* cAST::Driver::singleton(std::unique_ptr<cAST::Expr> expr) {
-//   return push_expression(std::move(expr));
-// }
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeIfStmt(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Stmt> thenStmt, std::unique_ptr<cAST::Stmt> elseStmt) {
+  auto* ifStmt = new cAST::IfStmt();
+
+  ifStmt->set_condition(std::move(cond));
+  ifStmt->set_thenStmt(std::move(thenStmt));
+  ifStmt->set_elseStmt(std::move(elseStmt));
+
+  return std::unique_ptr<cAST::Stmt>(ifStmt);
+}
+
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeWhileStmt(std::unique_ptr<cAST::Expr> cond, std::unique_ptr<cAST::Stmt> body) {
+  auto* whileStmt = new cAST::WhileStmt();
+
+  whileStmt->set_condition(std::move(cond));
+  whileStmt->set_body(std::move(body));
+
+  return std::unique_ptr<cAST::Stmt>(whileStmt);
+}
+
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeDoWhileStmt(std::unique_ptr<cAST::Stmt> body, std::unique_ptr<cAST::Expr> cond) {
+  auto* doWhileStmt = new cAST::DoWhileStmt();
+
+  doWhileStmt->set_body(std::move(body));
+  doWhileStmt->set_condition(std::move(cond));
+
+  return std::unique_ptr<cAST::Stmt>(doWhileStmt);
+}
+
+std::unique_ptr<cAST::Stmt> cAST::Driver::makeForStmt(
+  std::unique_ptr<cAST::ASTNode> init,
+  std::unique_ptr<cAST::ASTNode> cond,
+  std::unique_ptr<cAST::ASTNode> incr,
+  std::unique_ptr<cAST::Stmt> body
+) {
+  auto forStmt = std::make_unique<cAST::ForStmt>();
+
+  forStmt->set_init(std::move(init));
+  forStmt->set_condition(std::move(cond));
+  forStmt->set_increment(std::move(incr));
+  forStmt->set_body(std::move(body));
+
+  return forStmt;
+}
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeMember(std::unique_ptr<cAST::Expr> base, const std::string& memberName, bool isPointer) {
   auto* node = new cAST::MemberExpr();
@@ -359,6 +423,21 @@ std::unique_ptr<cAST::Expr> cAST::Driver::makeSubscript(std::unique_ptr<cAST::Ex
   node->set_index(std::move(index));
 
   return std::unique_ptr<cAST::Expr>(node);
+}
+
+std::unique_ptr<cAST::Decl> cAST::Driver::makeArrayDeclarator(std::unique_ptr<cAST::Decl> baseDecl, std::unique_ptr<cAST::Expr> sizeExpr) {
+  auto* arrayDecl = new cAST::ArrayDecl();
+
+  // Set the base declarator
+  if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(baseDecl.get())) {
+    arrayDecl->name = varDecl->name;
+  } else {
+    throw std::logic_error("Base declarator is not a VarDecl for array declarator");
+  }
+
+  arrayDecl->set_sizeExpr(std::move(sizeExpr));
+
+  return std::unique_ptr<cAST::Decl>(arrayDecl);
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeCall(std::unique_ptr<cAST::Expr> callee, std::vector<std::unique_ptr<cAST::Expr>> args) {
@@ -392,9 +471,28 @@ cAST::DeclSpecs cAST::Driver::combineSpecs(cAST::DeclSpecs a, cAST::DeclSpecs b)
   return combined;
 }
 
+void cAST::Driver::report_unimplemented_feature(const std::string& feature, const cAST::cASTParser::location_type& loc){
+  std::cerr << "Unimplemented feature: " << feature << " at " << loc.begin.line << ":" << loc.begin.column << " to " << loc.end.line << ":" << loc.end.column << std::endl;
+}
+
+void cAST::Driver::report_error(int line, int column, const std::string& message){
+  error_log_.push_back(std::make_tuple(line, column, message));
+  std::cerr << "Error at " << line << ":" << column << " - " << message << std::endl;
+  had_error_ = true;
+}
+
 void cAST::Driver::dump_ast(std::ostream& os) {
   if (!head_) {
     os << "<no AST>\n"; return;
   }
   cAST::prettyprint(*head_, os);
+}
+
+void cAST::Driver::dump_errors(std::ostream& os) {
+  if (error_log_.empty()) {
+    os << "<no errors>\n"; return;
+  }
+  for (const auto& [line, column, message] : error_log_) {
+    os << "Error at " << line << ":" << column << " - " << message << "\n";
+  }
 }

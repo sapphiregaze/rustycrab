@@ -51,9 +51,9 @@ enum class BUILTIN_TYPE {
 enum class UNARY_OPERATOR {
   PLUS,
   MINUS,
-  INCREMENT,
+  POST_INC,
   PRE_INC,
-  DECREMENT,
+  POST_DEC,
   PRE_DEC,
   ADDRESS_OF,
   DEREFERENCE,
@@ -232,6 +232,8 @@ void prettyprint(ASTNode &n, std::ostream &os);
 
 // // Decl
 // struct VarDecl;
+// struct ArrayDecl;
+// struct PointerDecl;
 // struct ParamDecl;
 // struct FieldDecl;
 // struct FunctionDecl;
@@ -240,11 +242,48 @@ void prettyprint(ASTNode &n, std::ostream &os);
 
 struct Stmt;
 struct Decl;
-struct TypeNode;
+
+// types
+struct TypeNode : public ASTNode {
+  std::vector<TYPE_QUALIFIER> qualifiers;
+  std::string name;
+  int sizeInBytes;
+  int alignmentInBytes;
+};
+
+struct BuiltinType : public TypeNode {
+  BUILTIN_TYPE type;
+  void set_type(BUILTIN_TYPE t) {
+    type = t;
+  }
+  void accept(ASTWalker &v) override;
+};
+
+// types are hard to inherit from statement and declarations
+struct PointerType : public TypeNode {
+  std::unique_ptr<TypeNode> baseType;
+
+  void set_pointeeType(std::unique_ptr<TypeNode> t) {
+    baseType = std::move(t);
+  }
+  void accept(ASTWalker &v) override;
+};
+
+struct ArrayType : public TypeNode {
+  std::unique_ptr<TypeNode> elementType;
+  void accept(ASTWalker &v) override;
+};
+
+struct FunctionType : public TypeNode {
+  std::unique_ptr<TypeNode> returnType;
+  void accept(ASTWalker &v) override;
+};
 
 struct DeclSpecs {
   std::vector<TYPE_STORAGE_QUALIFIER> storage;
   std::vector<TYPE_QUALIFIER> qualifiers;
+  // TODO does this need to be changed to be a type node?
+  // std::unique_ptr<TypeNode> type;
   BUILTIN_TYPE type;
 
   void set_from_builtin_type(BUILTIN_TYPE bt) {
@@ -252,16 +291,13 @@ struct DeclSpecs {
   }
 
   void set_from_type_node(std::unique_ptr<TypeNode> typeNode) {
-    type = BUILTIN_TYPE::Int;
-
-    // // For simplicity, only handle BuiltinType here
-    // if (auto* bt = dynamic_cast<BuiltinType*>(typeNode.get())) {
-    //   type = bt->type;
-    //   qualifiers = bt->qualifiers;
-    // }
-    // Handle other TypeNode derived types as needed
+    // For simplicity, only handle BuiltinType here
+    if (auto* bt = dynamic_cast<cAST::BuiltinType*>(typeNode.get())) {
+      type = bt->type;
+      qualifiers = bt->qualifiers;
+    }
+    // TODO Handle other TypeNode derived types as needed
   }
-  // std::unique_ptr<TypeNode> type;
   bool isInline{false};
   bool isNoreturn{false};
 };
@@ -452,26 +488,69 @@ struct CompoundStmt : public Stmt {
 struct WhileStmt : public Stmt {
   std::unique_ptr<Expr> condition;
   std::unique_ptr<Stmt> body;
+
+  void set_condition(std::unique_ptr<Expr> cond) {
+    condition = std::move(cond);
+  }
+  void set_body(std::unique_ptr<Stmt> b) {
+    body = std::move(b);
+  }
+
   void accept(ASTWalker &v) override;
 };
 
 struct DoWhileStmt : public Stmt {
   std::unique_ptr<Stmt> body;
   std::unique_ptr<Expr> condition;
+
+  void set_body(std::unique_ptr<Stmt> b) {
+    body = std::move(b);
+  }
+  void set_condition(std::unique_ptr<Expr> cond) {
+    condition = std::move(cond);
+  }
+
   void accept(ASTWalker &v) override;
 };
 
 struct ForStmt : public Stmt {
-  std::unique_ptr<Stmt> init;
-  std::unique_ptr<Expr> cond;
-  std::unique_ptr<Expr> incr;
+  std::unique_ptr<ASTNode> init;
+  std::unique_ptr<ASTNode> cond;
+  std::unique_ptr<ASTNode> incr;
   std::unique_ptr<Stmt> body;
+
+  void set_init(std::unique_ptr<ASTNode> i) {
+    init = std::move(i);
+  }
+  void set_condition(std::unique_ptr<ASTNode> c) {
+    cond = std::move(c);
+  }
+  void set_increment(std::unique_ptr<ASTNode> i) {
+    incr = std::move(i);
+  }
+  void set_body(std::unique_ptr<Stmt> b) {
+    body = std::move(b);
+  }
   void accept(ASTWalker &v) override;
 };
+
 struct IfStmt : public Stmt {
   std::unique_ptr<Expr> cond;
-  Stmt* thenBranch;
-  Stmt* elseBranch;
+  std::unique_ptr<Stmt> thenBranch;
+  std::unique_ptr<Stmt> elseBranch;
+  // Stmt* thenBranch;
+  // Stmt* elseBranch;
+
+  void set_condition(std::unique_ptr<Expr> c) {
+    cond = std::move(c);
+  }
+  void set_thenStmt(std::unique_ptr<Stmt> t) {
+    thenBranch = std::move(t);
+  }
+  void set_elseStmt(std::unique_ptr<Stmt> e) {
+    elseBranch = std::move(e);
+  }
+
   void accept(ASTWalker &v) override;
 };
 
@@ -533,10 +612,58 @@ struct DeclGroup : public Decl {
 };
 
 struct ParamDecl : public Decl {
-  std::string name;
   std::unique_ptr<TypeNode> type;
+  std::unique_ptr<DeclSpecs> specs;
+  std::unique_ptr<Decl> paramDecl;
+
+  void set_type(std::unique_ptr<TypeNode> t) {
+    type = std::move(t);
+  }
+
+  void set_paramDecl(std::unique_ptr<Decl> p) {
+    paramDecl = std::move(p);
+  }
+
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
+    specs = std::move(s);
+  }
+
   // indefinite arity;; idk if we implement tthat
   bool isVariadic{false};
+  void accept(ASTWalker &v) override;
+};
+
+struct ArrayDecl : public Decl {
+  std::string name;
+  std::unique_ptr<TypeNode> baseType;
+  std::unique_ptr<Expr> sizeExpr;
+  std::unique_ptr<DeclSpecs> specs;
+
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
+    specs = std::move(s);
+  }
+  void set_sizeExpr(std::unique_ptr<Expr> s) {
+    sizeExpr = std::move(s);
+  }
+  void set_baseType(std::unique_ptr<TypeNode> b) {
+    baseType = std::move(b);
+  }
+
+  void accept(ASTWalker &v) override;
+};
+
+struct PointerDecl : public Decl {
+  std::unique_ptr<Decl> baseDecl;
+  std::unique_ptr<DeclSpecs> specs;
+  std::unique_ptr<Expr> init;
+
+  void set_baseDecl(std::unique_ptr<Decl> b) {
+    baseDecl = std::move(b);
+  }
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
+    specs = std::move(s);
+  }
+
   void accept(ASTWalker &v) override;
 };
 
@@ -551,7 +678,8 @@ struct FunctionDecl : public Decl {
   std::string name;
   std::unique_ptr<TypeNode> type;
   std::vector<std::unique_ptr<ParamDecl>> params;
-  DeclSpecs specs;
+  // DeclSpecs specs;
+  std::unique_ptr<DeclSpecs> specs;
   std::unique_ptr<ASTNode> body;
   // indefinite arity;; idk if we implement tthat
   bool isVariadic{false};
@@ -560,8 +688,12 @@ struct FunctionDecl : public Decl {
     type = std::move(t);
   }
 
-  void set_specs(DeclSpecs s) {
-    specs = s;
+  // void set_specs(DeclSpecs s) {
+  //   specs = s;
+  // }
+
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
+    specs = std::move(s);
   }
 
   void set_body(std::unique_ptr<ASTNode> b) {
@@ -580,38 +712,6 @@ struct TranslationUnit : public Decl {
   void addDecl(Decl* decl) {
     declarations.push_back( decl );
   }
-  void accept(ASTWalker &v) override;
-};
-
-// types
-
-struct TypeNode : public ASTNode {
-  std::vector<TYPE_QUALIFIER> qualifiers;
-  std::string name;
-  int sizeInBytes;
-  int alignmentInBytes;
-};
-
-struct BuiltinType : public TypeNode {
-  BUILTIN_TYPE type;
-  void set_type(BUILTIN_TYPE t) {
-    type = t;
-  }
-  void accept(ASTWalker &v) override;
-};
-
-struct PointerType : public TypeNode {
-  std::unique_ptr<TypeNode> baseType;
-  void accept(ASTWalker &v) override;
-};
-
-struct ArrayType : public TypeNode {
-  std::unique_ptr<TypeNode> elementType;
-  void accept(ASTWalker &v) override;
-};
-
-struct FunctionType : public TypeNode {
-  std::unique_ptr<TypeNode> returnType;
   void accept(ASTWalker &v) override;
 };
 
@@ -659,12 +759,11 @@ struct ASTWalker {
 
   // Decl
   virtual void visit(VarDecl&) {}
+  virtual void visit(ArrayDecl&) {}
+  virtual void visit(PointerDecl&) {}
   virtual void visit(ParamDecl&) {}
   virtual void visit(DeclGroup&) {}
-  // virtual void visit(TypedefDecl&) {}
   virtual void visit(FieldDecl&) {}
-  // virtual void visit(RecordDecl&) {}
-  // virtual void visit(EnumDecl&) {}
   virtual void visit(FunctionDecl&) {}
   virtual void visit(DeclStmt&) {}
   virtual void visit(TranslationUnit&) {}
