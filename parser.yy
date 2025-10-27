@@ -88,10 +88,10 @@
   block_item_list
 
 %type <std::unique_ptr<cAST::Decl>>
-  declaration external_declaration declarator direct_declarator init_declarator
+  declaration external_declaration declarator direct_declarator init_declarator pointer
 
 %type <cAST::Decl*>
-  pointer function_definition
+  function_definition
 
 %type <std::vector<std::unique_ptr<cAST::Decl>>>
   init_declarator_list;
@@ -337,18 +337,19 @@ init_declarator
   ;
 
 declarator
-  : direct_declarator {
-      $$ = std::move($1);
+  : direct_declarator { $$ = std::move($1); }
+  /* | pointer direct_declarator { $$ = driver.wrapPointer(std::move($2)); } */
+  | '*' direct_declarator {
+      $$ = driver.wrapPointer(std::move($2));
     }
-  /* | pointer direct_declarator { $$ = driver.wrapPointer($2); } */
   ;
 
-/* pointer
-  : '*' { $$ = driver.wrapPointer(cAST::ParamDecl{}); }
-  | '*' pointer { $$ = driver.wrapPointer($2); }
-  | '*' type_qualifier pointer
-  | '*' type_qualifier
-  ; */
+/* pointer */
+  /* : '*' { $$ = driver.makeBasePointerDecl();  base pointer declaration} */
+  /* | '*' pointer { $$ = driver.wrapPointer(std::move($2)); } */
+  /* | '*' type_qualifier pointer { driver.report_unimplemented_feature("pointer with type qualifier", @1); } */
+  /* | '*' type_qualifier { driver.report_unimplemented_feature("pointer with type qualifier", @1); } */
+  /* ; */
 
 direct_declarator
   : IDENTIFIER { $$ = driver.makeIdentDeclarator($1); }
@@ -417,14 +418,14 @@ specifier_qualifier_list
 
 initializer
   : assignment_expression { $$ = std::move($1); }
-  | '{' initializer_list '}' { driver.report_unimplemented_feature("initializer list", @1); }
-  | '{' initializer_list ',' '}' { driver.report_unimplemented_feature("initializer list with trailing comma", @1); }
+  /* | '{' initializer_list '}' { driver.report_unimplemented_feature("initializer list", @1); } */
+  /* | '{' initializer_list ',' '}' { driver.report_unimplemented_feature("initializer list with trailing comma", @1); } */
   ;
 
-initializer_list
-  : initializer { /* $$ = std::vector<cAST::Expr*>{ std::move($1) }; */ }
-  | initializer_list ',' initializer { /* $1.emplace_back(std::move($3)); $$ = std::move($1); */ }
-  ;
+/* initializer_list
+  : initializer { $$ = std::vector<cAST::Expr*>{ std::move($1) }; }
+  | initializer_list ',' initializer { $1.emplace_back(std::move($3)); $$ = std::move($1); }
+  ; */
 
 statement
   : compound_statement { $$ = std::move($1); }

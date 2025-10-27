@@ -232,6 +232,8 @@ void prettyprint(ASTNode &n, std::ostream &os);
 
 // // Decl
 // struct VarDecl;
+// struct ArrayDecl;
+// struct PointerDecl;
 // struct ParamDecl;
 // struct FieldDecl;
 // struct FunctionDecl;
@@ -257,8 +259,13 @@ struct BuiltinType : public TypeNode {
   void accept(ASTWalker &v) override;
 };
 
+// types are hard to inherit from statement and declarations
 struct PointerType : public TypeNode {
   std::unique_ptr<TypeNode> baseType;
+
+  void set_pointeeType(std::unique_ptr<TypeNode> t) {
+    baseType = std::move(t);
+  }
   void accept(ASTWalker &v) override;
 };
 
@@ -631,6 +638,20 @@ struct ArrayDecl : public Decl {
   void accept(ASTWalker &v) override;
 };
 
+struct PointerDecl : public Decl {
+  std::unique_ptr<Decl> baseDecl;
+  std::unique_ptr<DeclSpecs> specs;
+
+  void set_baseDecl(std::unique_ptr<Decl> b) {
+    baseDecl = std::move(b);
+  }
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
+    specs = std::move(s);
+  }
+
+  void accept(ASTWalker &v) override;
+};
+
 struct FieldDecl : public Decl {
   std::string name;
   std::unique_ptr<TypeNode> type;
@@ -642,7 +663,8 @@ struct FunctionDecl : public Decl {
   std::string name;
   std::unique_ptr<TypeNode> type;
   std::vector<std::unique_ptr<ParamDecl>> params;
-  DeclSpecs specs;
+  // DeclSpecs specs;
+  std::unique_ptr<DeclSpecs> specs;
   std::unique_ptr<ASTNode> body;
   // indefinite arity;; idk if we implement tthat
   bool isVariadic{false};
@@ -651,8 +673,12 @@ struct FunctionDecl : public Decl {
     type = std::move(t);
   }
 
-  void set_specs(DeclSpecs s) {
-    specs = s;
+  // void set_specs(DeclSpecs s) {
+  //   specs = s;
+  // }
+
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
+    specs = std::move(s);
   }
 
   void set_body(std::unique_ptr<ASTNode> b) {
@@ -719,12 +745,10 @@ struct ASTWalker {
   // Decl
   virtual void visit(VarDecl&) {}
   virtual void visit(ArrayDecl&) {}
+  virtual void visit(PointerDecl&) {}
   virtual void visit(ParamDecl&) {}
   virtual void visit(DeclGroup&) {}
-  // virtual void visit(TypedefDecl&) {}
   virtual void visit(FieldDecl&) {}
-  // virtual void visit(RecordDecl&) {}
-  // virtual void visit(EnumDecl&) {}
   virtual void visit(FunctionDecl&) {}
   virtual void visit(DeclStmt&) {}
   virtual void visit(TranslationUnit&) {}

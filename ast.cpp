@@ -41,6 +41,7 @@ void ReturnStmt::accept(ASTWalker &v){ v.visit(*this); }
 // Decl
 void VarDecl::accept(ASTWalker &v){ v.visit(*this); }
 void ArrayDecl::accept(ASTWalker &v){ v.visit(*this); }
+void PointerDecl::accept(ASTWalker &v){ v.visit(*this); }
 void ParamDecl::accept(ASTWalker &v){ v.visit(*this); }
 void DeclGroup::accept(ASTWalker &v){ v.visit(*this); }
 void FieldDecl::accept(ASTWalker &v){ v.visit(*this); }
@@ -321,12 +322,14 @@ struct Printer : ASTWalker {
   }
 
   void visit(MemberExpr &e) override {
+    indent();
     if(e.base) e.base->accept(*this);
     os << (e.isPointer ? "->" : ".");
     os << e.memberName;
   }
 
   void visit(ArraySubscriptExpr &e) override {
+    indent();
     if(e.base) e.base->accept(*this);
     os << "[";
     if(e.index) e.index->accept(*this);
@@ -385,11 +388,12 @@ struct Printer : ASTWalker {
     os << "Variable Declaration:\n";
 
     setIndentLevel(indentLevel + 2);
-    auto& specs = *d.specs;
-    indent();
-    os << "Type: ";
-    printSpecs(specs);
-
+    if (d.specs) {
+      auto& specs = *d.specs;
+      indent();
+      os << "Type: ";
+      printSpecs(specs);
+    }
     if(!d.name.empty()) os << " " << d.name  << "\n";
 
     if(d.init){
@@ -409,10 +413,12 @@ struct Printer : ASTWalker {
     os << "Array Declaration:\n";
 
     setIndentLevel(indentLevel + 2);
-    auto& specs = *d.specs;
-    indent();
-    os << "Type: ";
-    printSpecs(specs);
+    if (d.specs) {
+      auto& specs = *d.specs;
+      indent();
+      os << "Type: ";
+      printSpecs(specs);
+    }
 
     if(!d.name.empty()) os << " " << d.name  << "\n";
 
@@ -427,6 +433,22 @@ struct Printer : ASTWalker {
       indent();
       os << "Size: unspecified\n";
     }
+
+    setIndentLevel(indentLevel - 2);
+  }
+
+  void visit(PointerDecl &d) override {
+    indent();
+    os << "Pointer Declaration:\n";
+
+    setIndentLevel(indentLevel + 2);
+    if (d.specs) {
+      auto& specs = *d.specs;
+      indent();
+      os << "Type: ";
+      printSpecs(specs);
+    }
+    if(d.baseDecl) d.baseDecl->accept(*this);
 
     setIndentLevel(indentLevel - 2);
   }
@@ -476,14 +498,17 @@ struct Printer : ASTWalker {
 
   void visit(FunctionDecl &d) override {
     indent();
-    
     os << "Function Declaration:\n";
     if(d.type) d.type->accept(*this);
-    
     setIndentLevel(indentLevel + 2);
     indent();
     os << "Function Signature: ";
-    printSpecs(d.specs);
+    if (d.specs) {
+      auto& specs = *d.specs;
+      indent();
+      os << "Type: ";
+      printSpecs(specs);
+    }
     os << " " << d.name << "\n";
 
     indent();

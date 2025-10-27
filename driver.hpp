@@ -66,7 +66,6 @@ public:
   std::unique_ptr<cAST::Stmt> makeExprStmt(std::unique_ptr<cAST::Expr> expr);
   std::unique_ptr<cAST::Stmt> makeDeclStmt(std::unique_ptr<cAST::Decl> decl);
   std::unique_ptr<cAST::Stmt> makeNullStmt();
-
   std::unique_ptr<cAST::Stmt> makeCompoundStmt(std::vector<std::unique_ptr<cAST::Stmt>> stmts);
 
   std::unique_ptr<cAST::Stmt> makeContinue();
@@ -83,6 +82,9 @@ public:
   std::unique_ptr<cAST::ParamDecl> makeParam(cAST::DeclSpecs specs, std::unique_ptr<cAST::Decl> decl);
   std::unique_ptr<cAST::Decl> makeIdentDeclarator(const std::string& name);
   std::unique_ptr<cAST::Decl> makeInitDecl(std::unique_ptr<cAST::Decl> decl, std::unique_ptr<cAST::Expr> init);
+
+  // std::unique_ptr<cAST::Decl> makeBasePointerDecl();
+  std::unique_ptr<cAST::PointerDecl> wrapPointer(std::unique_ptr<cAST::Decl> baseDecl);
 
   std::unique_ptr<cAST::Decl> makeDeclFromSpecs(cAST::DeclSpecs specs);
   std::unique_ptr<cAST::DeclGroup> makeDeclGroupFromSpecsAndInits(cAST::DeclSpecs specs, std::vector<std::unique_ptr<cAST::Decl>> initDecls);

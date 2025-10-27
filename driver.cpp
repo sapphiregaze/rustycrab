@@ -1,4 +1,5 @@
 #include "driver.hpp"
+#include <typeinfo>
 #include <iostream>
 #include <cctype>
 #include <fstream>
@@ -127,7 +128,6 @@ std::unique_ptr<cAST::Decl> cAST::Driver::makeFunctionDeclarator(
   bool isVariadic
 ) {
   auto* funcDecl = new cAST::FunctionDecl();
-  // Set the base declarator (e.g., the function name)
   if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(baseDecl.get())) {
     funcDecl->name = varDecl->name;
   } else {
@@ -137,6 +137,20 @@ std::unique_ptr<cAST::Decl> cAST::Driver::makeFunctionDeclarator(
   funcDecl->isVariadic = isVariadic;
 
   return std::unique_ptr<cAST::Decl>(funcDecl);
+}
+
+// std::unique_ptr<cAST::Decl> cAST::Driver::makeBasePointerDecl(){
+//   auto pointerDecl = std::make_unique<cAST::PointerDecl>();
+//   return pointerDecl;
+// }
+
+std::unique_ptr<cAST::PointerDecl> cAST::Driver::wrapPointer(std::unique_ptr<cAST::Decl> baseDecl){
+  // auto pointerDecl = std::make_unique<cAST::PointerDecl>();
+  auto* pointerDecl = new cAST::PointerDecl();
+  std::cout << "Wrapping pointer around base decl of type: " << typeid(*baseDecl).name() << std::endl;
+  pointerDecl->set_baseDecl(std::move(baseDecl));
+  // return pointerDecl;
+  return std::unique_ptr<cAST::PointerDecl>(pointerDecl);
 }
 
 cAST::Decl* cAST::Driver::makeFunctionDefinition(
@@ -149,17 +163,16 @@ cAST::Decl* cAST::Driver::makeFunctionDefinition(
 
   // TODO it seems like this will always lead to a previous function declaration found
   if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(baseDecl.get())) {
-    std::cout << "Function name from VarDecl: " << varDecl->name << std::endl;
     funcDecl->name = varDecl->name;
   } else if (auto* prevFnDecl = dynamic_cast<cAST::FunctionDecl*>(baseDecl.get())) {
-    std::cout << "Previous function declaration found: " << prevFnDecl->name << std::endl;
     funcDecl->name = prevFnDecl->name;
     funcDecl->set_params(std::move(prevFnDecl->params));
   } else {
     throw std::logic_error("Base declarator is not a VarDecl or FunctionDecl for function definition");
   }
 
-  funcDecl->set_specs(specs);
+  // funcDecl->set_specs(specs);
+  funcDecl->set_specs(std::make_unique<DeclSpecs>(specs));
   funcDecl->set_body(std::move(body));
   // funcDecl->isVariadic = isVariadic;
 
@@ -289,20 +302,25 @@ std::unique_ptr<cAST::DeclGroup> cAST::Driver::makeDeclGroupFromSpecsAndInits(cA
   for (auto& decl : initDecls) {
     if (auto* varDeclRaw = dynamic_cast<VarDecl*>(decl.get())) {
       auto varDecl(static_cast<VarDecl*>(decl.release()));
-
       varDecl->set_specs(std::make_unique<DeclSpecs>(specs));
       decls.push_back(std::unique_ptr<cAST::Decl>(varDecl)); // TODO this hints at the fact that maybe all pointers should be smart pointers?
+
     } else if (auto* arrdecl = dynamic_cast<cAST::ArrayDecl*>(decl.get())) {
-      // return decl;
       arrdecl->set_specs(std::make_unique<DeclSpecs>(specs));
       decls.push_back(std::move(decl));
+
+    } else if (auto* pointerDecl = dynamic_cast<cAST::PointerDecl*>(decl.get())) {
+      pointerDecl->set_specs(std::make_unique<DeclSpecs>(specs));
+      decls.push_back(std::move(decl));
+
     } else if (auto* functionDeclRaw = dynamic_cast<FunctionDecl*>(decl.get())) {
       auto functionDecl(static_cast<FunctionDecl*>(decl.release()));
-
-      functionDecl->set_specs(specs);
+      // functionDecl->set_specs(specs);
+      functionDecl->set_specs(std::make_unique<DeclSpecs>(specs));
       decls.push_back(std::unique_ptr<cAST::Decl>(functionDecl)); // TODO this hints at the fact that maybe all pointers should be smart pointers?
-    } else {
-      throw std::logic_error("Expected VarDecl or FuncDecl in initDecls");
+    }
+    else {
+      throw std::logic_error("Expected VarDecl, ArrayDecl, PointerDecl or FuncDecl in makeDeclGroupFromSpecsAndInits");
     }
   }
 
@@ -315,15 +333,24 @@ std::unique_ptr<cAST::Decl> cAST::Driver::makeInitDecl(std::unique_ptr<cAST::Dec
   if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(decl.get())) {
     varDecl->set_init(std::move(init));
     return decl;
+
   } else if (auto* arrdecl = dynamic_cast<cAST::ArrayDecl*>(decl.get())) {
     return decl;
+
+  } else if (auto* pointerDecl = dynamic_cast<cAST::PointerDecl*>(decl.get())) {
+    // pointerDecl->set_baseDecl(std::move(decl));
+    // return std::unique_ptr<cAST::Decl>(pointerDecl);
+    return decl;
+
   } else if (auto* functionDecl = dynamic_cast<cAST::FunctionDecl*>(decl.get())) {
     if (init) {
       throw std::logic_error("FunctionDecl cannot have an initializer");
     }
     return decl;
-  } else {
-    throw std::logic_error("Expected VarDecl, ArrDecl or FuncDecl in makeInitDecl");
+
+  }
+  else {
+    throw std::logic_error("Expected VarDecl, ArrDecl, PointerDecl or FuncDecl in makeInitDecl");
   }
 }
 
