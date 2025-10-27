@@ -110,8 +110,6 @@ std::unique_ptr<cAST::Expr> cAST::Driver::makeCond(std::unique_ptr<cAST::Expr> c
   condExpr->set_cond(std::move(cond));
   condExpr->set_thenExpr(std::move(thenExpr));
   condExpr->set_elseExpr(std::move(elseExpr));
-
-  // return static_cast<cAST::Expr*>(condExpr);
   return std::unique_ptr<cAST::Expr>(condExpr);
 }
 
@@ -139,15 +137,9 @@ std::unique_ptr<cAST::Decl> cAST::Driver::makeFunctionDeclarator(
   return std::unique_ptr<cAST::Decl>(funcDecl);
 }
 
-// std::unique_ptr<cAST::Decl> cAST::Driver::makeBasePointerDecl(){
-//   auto pointerDecl = std::make_unique<cAST::PointerDecl>();
-//   return pointerDecl;
-// }
-
 std::unique_ptr<cAST::PointerDecl> cAST::Driver::wrapPointer(std::unique_ptr<cAST::Decl> baseDecl){
   // auto pointerDecl = std::make_unique<cAST::PointerDecl>();
   auto* pointerDecl = new cAST::PointerDecl();
-  std::cout << "Wrapping pointer around base decl of type: " << typeid(*baseDecl).name() << std::endl;
   pointerDecl->set_baseDecl(std::move(baseDecl));
   // return pointerDecl;
   return std::unique_ptr<cAST::PointerDecl>(pointerDecl);
@@ -171,7 +163,6 @@ cAST::Decl* cAST::Driver::makeFunctionDefinition(
     throw std::logic_error("Base declarator is not a VarDecl or FunctionDecl for function definition");
   }
 
-  // funcDecl->set_specs(specs);
   funcDecl->set_specs(std::make_unique<DeclSpecs>(specs));
   funcDecl->set_body(std::move(body));
   // funcDecl->isVariadic = isVariadic;
@@ -180,26 +171,27 @@ cAST::Decl* cAST::Driver::makeFunctionDefinition(
 }
 
 std::unique_ptr<cAST::ParamDecl> cAST::Driver::makeParam(cAST::DeclSpecs specs, std::unique_ptr<cAST::Decl> decl) {
-  cAST::ASTNode* parent = head();
+  auto param = std::make_unique<cAST::ParamDecl>();
+  if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(decl.get())) {
+    param->set_paramDecl(std::move(decl));
+    param->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
+  } else if (auto* ptrDecl = dynamic_cast<cAST::PointerDecl*>(decl.get())) {
+    param->set_paramDecl(std::move(decl));
+    param->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
+  } else {
+    throw std::logic_error("Decl provided to makeParam is not a VarDecl or a PointerDecl");
+  }
 
-  auto param = new cAST::ParamDecl();
-  auto* ident = dynamic_cast<cAST::VarDecl*>(decl.get());
-  auto* type = new cAST::BuiltinType();
-
-  param->name = ident->name;
-
-  // TODO i'm worried that there is some other information that needs to be contained in type
-  type->set_type(specs.type);
-  param->type = std::unique_ptr<cAST::BuiltinType>(type);
-
-  return std::unique_ptr<cAST::ParamDecl>(param);
+  return param;
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeIdentifierExpr(const std::string& name) {
-  auto* ident = new cAST::IdentifierExpr();
+  // auto* ident = new cAST::IdentifierExpr();
+  auto ident = std::make_unique<cAST::IdentifierExpr>();
   ident->set_name(name);
 
-  return std::unique_ptr<cAST::Expr>(ident);
+  // return std::unique_ptr<cAST::Expr>(ident);
+  return ident;
 }
 
 std::unique_ptr<cAST::Expr> cAST::Driver::makeConstantIntExpr(int value) {

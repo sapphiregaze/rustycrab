@@ -83,7 +83,6 @@ public:
   std::unique_ptr<cAST::Decl> makeIdentDeclarator(const std::string& name);
   std::unique_ptr<cAST::Decl> makeInitDecl(std::unique_ptr<cAST::Decl> decl, std::unique_ptr<cAST::Expr> init);
 
-  // std::unique_ptr<cAST::Decl> makeBasePointerDecl();
   std::unique_ptr<cAST::PointerDecl> wrapPointer(std::unique_ptr<cAST::Decl> baseDecl);
 
   std::unique_ptr<cAST::Decl> makeDeclFromSpecs(cAST::DeclSpecs specs);

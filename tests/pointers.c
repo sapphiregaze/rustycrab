@@ -1,5 +1,5 @@
 // pass by pointer
-// void test2(int *arr, int size);
+void test2(int *arr, int size);
 
 void main () {
   // pointer test
@@ -8,8 +8,10 @@ void main () {
   p = &x;
 }
 
-// void test2(int *arr, int size) {
-//   for(int i = 0; i < size; i = i + 1) {
-//     arr[i] = i;
-//   }
-// }
+void test (int param1, int param2) {
+  return param1 + param2;
+}
+
+void test2(int *x) {
+  return *x + 1;
+}

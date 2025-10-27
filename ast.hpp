@@ -612,8 +612,22 @@ struct DeclGroup : public Decl {
 };
 
 struct ParamDecl : public Decl {
-  std::string name;
   std::unique_ptr<TypeNode> type;
+  std::unique_ptr<DeclSpecs> specs;
+  std::unique_ptr<Decl> paramDecl;
+
+  void set_type(std::unique_ptr<TypeNode> t) {
+    type = std::move(t);
+  }
+
+  void set_paramDecl(std::unique_ptr<Decl> p) {
+    paramDecl = std::move(p);
+  }
+
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
+    specs = std::move(s);
+  }
+
   // indefinite arity;; idk if we implement tthat
   bool isVariadic{false};
   void accept(ASTWalker &v) override;

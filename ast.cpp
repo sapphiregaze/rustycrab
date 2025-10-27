@@ -388,7 +388,7 @@ struct Printer : ASTWalker {
     os << "Variable Declaration:\n";
 
     setIndentLevel(indentLevel + 2);
-    if (d.specs) {
+    if (d.specs != nullptr) {
       auto& specs = *d.specs;
       indent();
       os << "Type: ";
@@ -442,7 +442,7 @@ struct Printer : ASTWalker {
     os << "Pointer Declaration:\n";
 
     setIndentLevel(indentLevel + 2);
-    if (d.specs) {
+    if (d.specs != nullptr) {
       auto& specs = *d.specs;
       indent();
       os << "Type: ";
@@ -472,12 +472,17 @@ struct Printer : ASTWalker {
     indent();
     os << "Parameter Declaration:\n";
     setIndentLevel(indentLevel + 2);
-    if(d.type) {
-      d.type->accept(*this);
-    }
-    if(!d.name.empty()) {
+    // if(d.type) {
+    //   d.type->accept(*this);
+    // }
+    if (d.specs) {
+      auto& specs = *d.specs;
       indent();
-      os << "Parameter Name: " << d.name << "\n";
+      os << "Type: ";
+      printSpecs(specs);
+    }
+    if(d.paramDecl) {
+      d.paramDecl->accept(*this);
     }
     indent();
     os << "Variadic: " << (d.isVariadic ? "True" : "False") << "\n";

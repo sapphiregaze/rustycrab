@@ -377,12 +377,19 @@ parameter_list
       $$ = std::vector<std::unique_ptr<cAST::ParamDecl>>{};
       $$.emplace_back(std::move($1));
     }
-  | parameter_list ',' parameter_declaration { $1.emplace_back(std::move($3)); $$ = std::move($1); }
+  | parameter_list ',' parameter_declaration {
+      $1.emplace_back(std::move($3));
+      $$ = std::move($1);
+    }
   ;
 
 parameter_declaration
-  : declaration_specifiers declarator { $$ = driver.makeParam($1, std::move($2)); }
-  | declaration_specifiers { $$ = driver.makeParam($1, nullptr); }
+  : declaration_specifiers declarator {
+      $$ = driver.makeParam($1, std::move($2));
+    }
+  | declaration_specifiers {
+      $$ = driver.makeParam($1, nullptr);
+    }
   ;
 
 identifier_list
@@ -513,19 +520,15 @@ translation_unit
 
 external_declaration
   : declaration {
-      std::cout << "Declaration parsed from external_declaration." << std::endl;
       $$ = std::move($1);
     }
   | function_definition {
-      std::cout << "Function definition parsed from external_declaration." << std::endl;
       $$ = std::unique_ptr<cAST::Decl>($1);
     }
   ;
 
 function_definition
   : declaration_specifiers declarator compound_statement {
-      std::cout << "Parsed function definition." << std::endl;
-      std::cout << "Declarator name: " << static_cast<cAST::VarDecl*>($2.get())->name << std::endl;
       $$ = driver.makeFunctionDefinition(std::move($2), std::move($3), std::move($1), false);
     }
   ;
