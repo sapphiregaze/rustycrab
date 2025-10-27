@@ -240,12 +240,43 @@ void prettyprint(ASTNode &n, std::ostream &os);
 
 struct Stmt;
 struct Decl;
-struct TypeNode;
+
+// types
+struct TypeNode : public ASTNode {
+  std::vector<TYPE_QUALIFIER> qualifiers;
+  std::string name;
+  int sizeInBytes;
+  int alignmentInBytes;
+};
+
+struct BuiltinType : public TypeNode {
+  BUILTIN_TYPE type;
+  void set_type(BUILTIN_TYPE t) {
+    type = t;
+  }
+  void accept(ASTWalker &v) override;
+};
+
+struct PointerType : public TypeNode {
+  std::unique_ptr<TypeNode> baseType;
+  void accept(ASTWalker &v) override;
+};
+
+struct ArrayType : public TypeNode {
+  std::unique_ptr<TypeNode> elementType;
+  void accept(ASTWalker &v) override;
+};
+
+struct FunctionType : public TypeNode {
+  std::unique_ptr<TypeNode> returnType;
+  void accept(ASTWalker &v) override;
+};
 
 struct DeclSpecs {
   std::vector<TYPE_STORAGE_QUALIFIER> storage;
   std::vector<TYPE_QUALIFIER> qualifiers;
   // TODO does this need to be changed to be a type node?
+  // std::unique_ptr<TypeNode> type;
   BUILTIN_TYPE type;
 
   void set_from_builtin_type(BUILTIN_TYPE bt) {
@@ -253,17 +284,13 @@ struct DeclSpecs {
   }
 
   void set_from_type_node(std::unique_ptr<TypeNode> typeNode) {
-    // TODO does this need to actually read the typeNode?
-    type = BUILTIN_TYPE::Int;
-
-    // // For simplicity, only handle BuiltinType here
-    // if (auto* bt = dynamic_cast<BuiltinType*>(typeNode.get())) {
-    //   type = bt->type;
-    //   qualifiers = bt->qualifiers;
-    // }
-    // Handle other TypeNode derived types as needed
+    // For simplicity, only handle BuiltinType here
+    if (auto* bt = dynamic_cast<cAST::BuiltinType*>(typeNode.get())) {
+      type = bt->type;
+      qualifiers = bt->qualifiers;
+    }
+    // TODO Handle other TypeNode derived types as needed
   }
-  // std::unique_ptr<TypeNode> type;
   bool isInline{false};
   bool isNoreturn{false};
 };
@@ -644,38 +671,6 @@ struct TranslationUnit : public Decl {
   void addDecl(Decl* decl) {
     declarations.push_back( decl );
   }
-  void accept(ASTWalker &v) override;
-};
-
-// types
-
-struct TypeNode : public ASTNode {
-  std::vector<TYPE_QUALIFIER> qualifiers;
-  std::string name;
-  int sizeInBytes;
-  int alignmentInBytes;
-};
-
-struct BuiltinType : public TypeNode {
-  BUILTIN_TYPE type;
-  void set_type(BUILTIN_TYPE t) {
-    type = t;
-  }
-  void accept(ASTWalker &v) override;
-};
-
-struct PointerType : public TypeNode {
-  std::unique_ptr<TypeNode> baseType;
-  void accept(ASTWalker &v) override;
-};
-
-struct ArrayType : public TypeNode {
-  std::unique_ptr<TypeNode> elementType;
-  void accept(ASTWalker &v) override;
-};
-
-struct FunctionType : public TypeNode {
-  std::unique_ptr<TypeNode> returnType;
   void accept(ASTWalker &v) override;
 };
 

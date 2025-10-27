@@ -119,7 +119,7 @@ primary_expression
   : IDENTIFIER { $$ = driver.makeIdentifierExpr($1); }
   | constant { $$ = std::move($1); }
   | string { $$ = std::move($1); }
-  /* | '(' expression ')' { $$ = std::move($2); } */
+  | '(' expression ')' { $$ = std::move($2); }
   ;
 
 constant
@@ -159,9 +159,7 @@ argument_expression_list
 
 unary_expression
   : postfix_expression { $$ = std::move($1); }
-  | INC_OP unary_expression { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::PRE_INC, std::move($2)); }
-  | DEC_OP unary_expression { $$ = driver.makeUnary(cAST::UNARY_OPERATOR::PRE_DEC, std::move($2)); }
-  /* | unary_operator cast_expression { $$ = driver.makeUnary($1, $2); } */
+  | unary_operator cast_expression { $$ = driver.makeUnary($1, std::move($2)); }
   /* | SIZEOF unary_expression                      { make it a builtin unary if you model it$$ = driver.makeUnary(AST::UnaryOp::SizeofExpr custom, std::move($2), @1); } */
   /* | SIZEOF '(' type_name ')'                     { $$ = driver.makeCast(sizeof-type as expr std::move($3), nullptr, @1); or a dedicated node } */
   /* | ALIGNOF '(' type_name ')'                    { $$ = driver.makeCast(alignof-type expr std::move($3), nullptr, @1); } */
@@ -174,6 +172,9 @@ unary_operator
   | '-' { $$ = cAST::UNARY_OPERATOR::MINUS; }
   | '~' { $$ = cAST::UNARY_OPERATOR::BITWISE_NOT; }
   | '!' { $$ = cAST::UNARY_OPERATOR::LOGICAL_NOT; }
+  // TODO this worries me
+  | INC_OP { $$ = cAST::UNARY_OPERATOR::PRE_INC; }
+  | DEC_OP { $$ = cAST::UNARY_OPERATOR::PRE_DEC; }
   ;
 
 cast_expression
