@@ -175,7 +175,7 @@ struct Printer : ASTWalker {
     return "?";
   }
 
-  void printSpecs(const DeclSpecs& specs){
+  void printSpecs(const DeclSpecsAndQuals& specs){
     for(auto sc : specs.storage){
       switch(sc){
         case TYPE_STORAGE_QUALIFIER::Typedef: os << "typedef "; break;

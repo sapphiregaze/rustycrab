@@ -80,6 +80,13 @@ std::unique_ptr<cAST::TypeNode> cAST::Driver::makeBuiltinType(cAST::BUILTIN_TYPE
   return std::unique_ptr<cAST::TypeNode>(type);
 }
 
+std::unique_ptr<cAST::TypeNode> cAST::Driver::makePointerType(std::unique_ptr<cAST::TypeNode> type) {
+  auto* ptr = new cAST::PointerType();
+  ptr->set_pointeeType(std::move(type));
+
+  return std::unique_ptr<cAST::TypeNode>(ptr);
+}
+
 std::unique_ptr<cAST::Expr> cAST::Driver::makeUnary(cAST::UNARY_OPERATOR op, std::unique_ptr<cAST::Expr> expr) {
   auto* unary = new cAST::UnaryExpr();
   unary->set_op(op);
@@ -137,18 +144,10 @@ std::unique_ptr<cAST::Decl> cAST::Driver::makeFunctionDeclarator(
   return std::unique_ptr<cAST::Decl>(funcDecl);
 }
 
-std::unique_ptr<cAST::PointerDecl> cAST::Driver::wrapPointer(std::unique_ptr<cAST::Decl> baseDecl){
-  // auto pointerDecl = std::make_unique<cAST::PointerDecl>();
-  auto* pointerDecl = new cAST::PointerDecl();
-  pointerDecl->set_baseDecl(std::move(baseDecl));
-  // return pointerDecl;
-  return std::unique_ptr<cAST::PointerDecl>(pointerDecl);
-}
-
 cAST::Decl* cAST::Driver::makeFunctionDefinition(
   std::unique_ptr<cAST::Decl> baseDecl,
   std::unique_ptr<cAST::Stmt> body,
-  DeclSpecs specs,
+  DeclSpecsAndQuals specs,
   bool isVariadic
 ) {
   auto* funcDecl = new cAST::FunctionDecl();
@@ -163,21 +162,21 @@ cAST::Decl* cAST::Driver::makeFunctionDefinition(
     throw std::logic_error("Base declarator is not a VarDecl or FunctionDecl for function definition");
   }
 
-  funcDecl->set_specs(std::make_unique<DeclSpecs>(specs));
+  funcDecl->set_specs(std::make_unique<DeclSpecsAndQuals>(specs));
   funcDecl->set_body(std::move(body));
   // funcDecl->isVariadic = isVariadic;
 
   return static_cast<cAST::Decl*>(funcDecl);
 }
 
-std::unique_ptr<cAST::ParamDecl> cAST::Driver::makeParam(cAST::DeclSpecs specs, std::unique_ptr<cAST::Decl> decl) {
+std::unique_ptr<cAST::ParamDecl> cAST::Driver::makeParam(cAST::DeclSpecsAndQuals specs, std::unique_ptr<cAST::Decl> decl) {
   auto param = std::make_unique<cAST::ParamDecl>();
   if (auto* varDecl = dynamic_cast<cAST::VarDecl*>(decl.get())) {
     param->set_paramDecl(std::move(decl));
-    param->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
+    param->set_specs(std::make_unique<cAST::DeclSpecsAndQuals>(specs));
   } else if (auto* ptrDecl = dynamic_cast<cAST::PointerDecl*>(decl.get())) {
     param->set_paramDecl(std::move(decl));
-    param->set_specs(std::make_unique<cAST::DeclSpecs>(specs));
+    param->set_specs(std::make_unique<cAST::DeclSpecsAndQuals>(specs));
   } else {
     throw std::logic_error("Decl provided to makeParam is not a VarDecl or a PointerDecl");
   }
@@ -261,54 +260,54 @@ std::unique_ptr<cAST::Stmt> cAST::Driver::makeReturn(std::unique_ptr<cAST::Expr>
   return std::unique_ptr<cAST::Stmt>(stmt);
 }
 
-cAST::DeclSpecs cAST::Driver::makeSpecsFromBuiltinType(cAST::BUILTIN_TYPE bt) {
-  cAST::DeclSpecs specs;
-  specs.set_from_builtin_type(bt);
+cAST::DeclSpecsAndQuals cAST::Driver::makeSpecsFromTypeNode(std::unique_ptr<cAST::TypeNode> type) {
+  DeclSpecsAndQuals specs;
+  specs.set_type(std::move(type));
   return specs;
 }
 
-cAST::DeclSpecs cAST::Driver::makeSpecsFromTypeQual(cAST::TYPE_QUALIFIER tq) {
-  cAST::DeclSpecs specs;
+cAST::DeclSpecsAndQuals cAST::Driver::makeSpecsFromTypeQual(cAST::TYPE_QUALIFIER tq) {
+  cAST::DeclSpecsAndQuals specs;
   specs.qualifiers.push_back(tq);
   return specs;
 }
 
-cAST::DeclSpecs cAST::Driver::makeSpecsFromStorageClass(cAST::TYPE_STORAGE_QUALIFIER sc) {
-  cAST::DeclSpecs specs;
+cAST::DeclSpecsAndQuals cAST::Driver::makeSpecsFromStorageClass(cAST::TYPE_STORAGE_QUALIFIER sc) {
+  cAST::DeclSpecsAndQuals specs;
   specs.storage.push_back(sc);
   return specs;
 }
 
-std::unique_ptr<cAST::Decl> cAST::Driver::makeDeclFromSpecs(cAST::DeclSpecs specs) {
+std::unique_ptr<cAST::Decl> cAST::Driver::makeDeclFromSpecs(cAST::DeclSpecsAndQuals specs) {
   auto* decl = new cAST::VarDecl();
-  decl->set_specs(std::make_unique<cAST::DeclSpecs>(std::move(specs)));
+  decl->set_specs(std::make_unique<cAST::DeclSpecsAndQuals>(std::move(specs)));
 
   // return static_cast<cAST::Decl*>(decl);
   return std::unique_ptr<cAST::Decl>(decl);
 }
 
-std::unique_ptr<cAST::DeclGroup> cAST::Driver::makeDeclGroupFromSpecsAndInits(cAST::DeclSpecs specs, std::vector<std::unique_ptr<cAST::Decl>> initDecls) {
+std::unique_ptr<cAST::DeclGroup> cAST::Driver::makeDeclGroupFromSpecsAndInits(cAST::DeclSpecsAndQuals specs, std::vector<std::unique_ptr<cAST::Decl>> initDecls) {
   auto* group = new DeclGroup();
   auto decls = std::vector<std::unique_ptr<Decl>>();
 
   for (auto& decl : initDecls) {
     if (auto* varDeclRaw = dynamic_cast<VarDecl*>(decl.get())) {
       auto varDecl(static_cast<VarDecl*>(decl.release()));
-      varDecl->set_specs(std::make_unique<DeclSpecs>(specs));
+      varDecl->set_specs(std::make_unique<DeclSpecsAndQuals>(specs));
       decls.push_back(std::unique_ptr<cAST::Decl>(varDecl)); // TODO this hints at the fact that maybe all pointers should be smart pointers?
 
     } else if (auto* arrdecl = dynamic_cast<cAST::ArrayDecl*>(decl.get())) {
-      arrdecl->set_specs(std::make_unique<DeclSpecs>(specs));
+      arrdecl->set_specs(std::make_unique<DeclSpecsAndQuals>(specs));
       decls.push_back(std::move(decl));
 
     } else if (auto* pointerDecl = dynamic_cast<cAST::PointerDecl*>(decl.get())) {
-      pointerDecl->set_specs(std::make_unique<DeclSpecs>(specs));
+      pointerDecl->set_specs(std::make_unique<DeclSpecsAndQuals>(specs));
       decls.push_back(std::move(decl));
 
     } else if (auto* functionDeclRaw = dynamic_cast<FunctionDecl*>(decl.get())) {
       auto functionDecl(static_cast<FunctionDecl*>(decl.release()));
       // functionDecl->set_specs(specs);
-      functionDecl->set_specs(std::make_unique<DeclSpecs>(specs));
+      functionDecl->set_specs(std::make_unique<DeclSpecsAndQuals>(specs));
       decls.push_back(std::unique_ptr<cAST::Decl>(functionDecl)); // TODO this hints at the fact that maybe all pointers should be smart pointers?
     }
     else {
@@ -450,14 +449,8 @@ std::unique_ptr<cAST::Expr> cAST::Driver::makeCall(std::unique_ptr<cAST::Expr> c
   return std::unique_ptr<cAST::Expr>(call);
 }
 
-cAST::DeclSpecs cAST::Driver::makeSpecsFromTypeNode(std::unique_ptr<cAST::TypeNode> type) {
-  DeclSpecs specs;
-  specs.set_from_type_node(std::move(type));
-  return specs;
-}
-
-cAST::DeclSpecs cAST::Driver::combineSpecs(cAST::DeclSpecs a, cAST::DeclSpecs b) {
-  cAST::DeclSpecs combined;
+cAST::DeclSpecsAndQuals cAST::Driver::combineSpecs(cAST::DeclSpecsAndQuals a, cAST::DeclSpecsAndQuals b) {
+  cAST::DeclSpecsAndQuals combined;
   // Combine type info
   if (a.type == cAST::BUILTIN_TYPE::Void) combined.type = b.type;
   else if (b.type == cAST::BUILTIN_TYPE::Void) combined.type = a.type;
