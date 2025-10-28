@@ -175,28 +175,28 @@ struct Printer : ASTWalker {
     return "?";
   }
 
-  void printSpec(const DeclSpecOrQual& specs){
-    switch(specs.storage_class_specifier){
-      case TYPE_STORAGE_QUALIFIER::Typedef: os << "typedef "; break;
-      case TYPE_STORAGE_QUALIFIER::Static: os << "static "; break;
-      case TYPE_STORAGE_QUALIFIER::Extern: os << "extern "; break;
-      case TYPE_STORAGE_QUALIFIER::Register: os << "register "; break;
-      case TYPE_STORAGE_QUALIFIER::Auto: os << "auto "; break;
-      case TYPE_STORAGE_QUALIFIER::Thread_Local: os << "_Thread_local "; break;
-      case TYPE_STORAGE_QUALIFIER::None: break;
+  void printSpecs(const DeclSpecsAndQuals& specs){
+    for(auto sc : specs.storage){
+      switch(sc){
+        case TYPE_STORAGE_QUALIFIER::Typedef: os << "typedef "; break;
+        case TYPE_STORAGE_QUALIFIER::Static: os << "static "; break;
+        case TYPE_STORAGE_QUALIFIER::Extern: os << "extern "; break;
+        case TYPE_STORAGE_QUALIFIER::Register: os << "register "; break;
+        case TYPE_STORAGE_QUALIFIER::Auto: os << "auto "; break;
+        case TYPE_STORAGE_QUALIFIER::Thread_Local: os << "_Thread_local "; break;
+        case TYPE_STORAGE_QUALIFIER::None: break;
+      }
     }
-    switch(specs.type_qualifier){
-      case TYPE_QUALIFIER::Const: os << "const "; break;
-      case TYPE_QUALIFIER::Restrict: os << "restrict "; break;
-      case TYPE_QUALIFIER::Volatile: os << "volatile "; break;
-      case TYPE_QUALIFIER::Atomic: os << "_Atomic "; break;
-      case TYPE_QUALIFIER::None: break;
+    for(auto tq : specs.qualifiers){
+      switch(tq){
+        case TYPE_QUALIFIER::Const: os << "const "; break;
+        case TYPE_QUALIFIER::Restrict: os << "restrict "; break;
+        case TYPE_QUALIFIER::Volatile: os << "volatile "; break;
+        case TYPE_QUALIFIER::Atomic: os << "_Atomic "; break;
+        case TYPE_QUALIFIER::None: break;
+      }
     }
-    switch(specs.function_specifier){
-      case FUNCTION_SPECIFIER::INLINE: os << "inline "; break;
-      case FUNCTION_SPECIFIER::NO_RETURN: os << "noreturn "; break;
-    }
-    specs.type_specifier->accept(*this);
+    os << builtinToString(specs.type);
   }
 
   void visit(UnaryExpr &e) override {
@@ -392,7 +392,7 @@ struct Printer : ASTWalker {
       auto& specs = *d.specs;
       indent();
       os << "Type: ";
-      printSpec(spec);
+      printSpecs(specs);
       os << "\n";
     }
     indent();

@@ -106,11 +106,9 @@
 %type <std::unique_ptr<cAST::ParamDecl>>
   parameter_declaration
 
-%type <cAST::DeclSpecOrQual>
-  declaration_specifiers
 
-%type <std::vector<cAST::DeclSpecOrQual>>
-  specifier_qualifier_list
+%type <cAST::DeclSpecs>
+  declaration_specifiers specifier_qualifier_list
 
 %start translation_unit
 

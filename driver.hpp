@@ -37,7 +37,6 @@ public:
   void ensure_root();
 
   std::unique_ptr<cAST::TypeNode> makeBuiltinType(cAST::BUILTIN_TYPE bt);
-  std::unique_ptr<cAST::TypeNode> makePointerType(std::unique_ptr<cAST::TypeNode> type);
 
   std::unique_ptr<cAST::Expr> makeBinary(cAST::BINARY_OPERATOR op, std::unique_ptr<cAST::Expr> left, std::unique_ptr<cAST::Expr> right);
   std::unique_ptr<cAST::Expr> makeUnary(cAST::UNARY_OPERATOR op, std::unique_ptr<cAST::Expr> expr);
@@ -77,25 +76,25 @@ public:
   cAST::Decl* makeFunctionDefinition(
     std::unique_ptr<cAST::Decl> baseDecl,
     std::unique_ptr<cAST::Stmt> body,
-    DeclSpecsAndQuals specs,
+    DeclSpecs specs,
     bool isVariadic
   );
-  std::unique_ptr<cAST::ParamDecl> makeParam(cAST::DeclSpecsAndQuals specs, std::unique_ptr<cAST::Decl> decl);
+  std::unique_ptr<cAST::ParamDecl> makeParam(cAST::DeclSpecs specs, std::unique_ptr<cAST::Decl> decl);
   std::unique_ptr<cAST::Decl> makeIdentDeclarator(const std::string& name);
   std::unique_ptr<cAST::Decl> makeInitDecl(std::unique_ptr<cAST::Decl> decl, std::unique_ptr<cAST::Expr> init);
 
   std::unique_ptr<cAST::PointerDecl> wrapPointer(std::unique_ptr<cAST::Decl> baseDecl);
 
-  std::unique_ptr<cAST::Decl> makeDeclFromSpecs(cAST::DeclSpecsAndQuals specs);
-  std::unique_ptr<cAST::DeclGroup> makeDeclGroupFromSpecsAndInits(cAST::DeclSpecsAndQuals specs, std::vector<std::unique_ptr<cAST::Decl>> initDecls);
+  std::unique_ptr<cAST::Decl> makeDeclFromSpecs(cAST::DeclSpecs specs);
+  std::unique_ptr<cAST::DeclGroup> makeDeclGroupFromSpecsAndInits(cAST::DeclSpecs specs, std::vector<std::unique_ptr<cAST::Decl>> initDecls);
 
   std::unique_ptr<cAST::Decl> makeArrayDeclarator(std::unique_ptr<cAST::Decl> baseDecl, std::unique_ptr<cAST::Expr> sizeExpr);
 
-  cAST::DeclSpecsAndQuals makeSpecsFromBuiltinType(cAST::BUILTIN_TYPE bt);
-  cAST::DeclSpecsAndQuals makeSpecsFromTypeQual(cAST::TYPE_QUALIFIER tq);
-  cAST::DeclSpecsAndQuals makeSpecsFromStorageClass(cAST::TYPE_STORAGE_QUALIFIER sc);
-  cAST::DeclSpecsAndQuals makeSpecsFromTypeNode(std::unique_ptr<cAST::TypeNode> type);
-  cAST::DeclSpecsAndQuals combineSpecs(cAST::DeclSpecsAndQuals a, cAST::DeclSpecsAndQuals b);
+  cAST::DeclSpecs makeSpecsFromBuiltinType(cAST::BUILTIN_TYPE bt);
+  cAST::DeclSpecs makeSpecsFromTypeQual(cAST::TYPE_QUALIFIER tq);
+  cAST::DeclSpecs makeSpecsFromStorageClass(cAST::TYPE_STORAGE_QUALIFIER sc);
+  cAST::DeclSpecs makeSpecsFromTypeNode(std::unique_ptr<cAST::TypeNode> type);
+  cAST::DeclSpecs combineSpecs(cAST::DeclSpecs a, cAST::DeclSpecs b);
 
   std::vector<std::tuple<int, int, std::string>> error_log_;
   bool had_error_ = false;

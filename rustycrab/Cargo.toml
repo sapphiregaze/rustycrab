@@ -1,0 +1,17 @@
+[package]
+name = "rustycrab"
+version = "0.1.0"
+edition = "2024"
+description = "A Modern & Rusty ANSI C Compiler For RISC-V32"
+
+[[bin]]
+name = "rc"
+path = "src/main.rs"
+
+[dependencies]
+clap = "4.5.49"
+lexer = { path = "../lexer/" }
+parser = { path = "../parser/" }
+chumsky = "0.11.1"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+tracing.workspace = true
