@@ -114,6 +114,11 @@ enum class TYPE_QUALIFIER {
   Atomic
 };
 
+enum class FUNCTION_SPECIFIER {
+  INLINE,
+  NO_RETURN
+};
+
 struct SourcePos {
   std::string file;
   uint32_t line{0};
@@ -279,17 +284,13 @@ struct FunctionType : public TypeNode {
   void accept(ASTWalker &v) override;
 };
 
-struct DeclSpecsAndQuals {
-  std::vector<TYPE_STORAGE_QUALIFIER> storage;
-  std::vector<TYPE_QUALIFIER> qualifiers;
-  std::unique_ptr<TypeNode> type;
-
-  void set_type(std::unique_ptr<TypeNode> t) {
-    type = std::move(t);
-  }
-
-  bool isInline{false};
-  bool isNoreturn{false};
+union DeclSpecOrQual {
+  TYPE_STORAGE_QUALIFIER storage_class_specifier;
+  TYPE_QUALIFIER type_qualifier;
+  FUNCTION_SPECIFIER function_specifier;
+  std::unique_ptr<TypeNode> type_specifier;
+  
+  // TODO alignment_specifier to be added?
 };
 
 // expressions
@@ -668,7 +669,6 @@ struct FunctionDecl : public Decl {
   std::string name;
   std::unique_ptr<TypeNode> type;
   std::vector<std::unique_ptr<ParamDecl>> params;
-  // DeclSpecs specs;
   std::unique_ptr<DeclSpecsAndQuals> specs;
   std::unique_ptr<ASTNode> body;
   // indefinite arity;; idk if we implement tthat
