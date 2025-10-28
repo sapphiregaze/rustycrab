@@ -1,5 +1,6 @@
 .vscode
 build
+**/target
 bison_fetch-prefix
 flex_fetch-prefix
 CMakeFiles

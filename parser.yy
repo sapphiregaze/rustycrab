@@ -88,7 +88,7 @@
   block_item_list
 
 %type <std::unique_ptr<cAST::Decl>>
-  declaration external_declaration declarator direct_declarator init_declarator pointer
+  declaration external_declaration declarator direct_declarator init_declarator
 
 %type <cAST::Decl*>
   function_definition
@@ -97,7 +97,7 @@
   init_declarator_list;
 
 
-%type <std::unique_ptr<cAST::TypeNode>> type_name
+%type <std::unique_ptr<cAST::TypeNode>> type_name pointer
 
 
 %type <std::vector<std::unique_ptr<cAST::ParamDecl>>>
@@ -358,12 +358,13 @@ declarator
 
 pointer
   : '*' { 
-      // create a new PointerDecl node that will be filled in by the calling parse rule
-      auto* ptr_decl = new cAST::PointerDecl();
-      $$ = std::unique_ptr<cAST::PointerDecl>(ptr_decl);
+      // create an empty Pointer node that will eventually be filled in with the correct type
+      auto* ptr_type = new cAST::PointerType();
+      $$ = std::unique_ptr<cAST::PointerType>(ptr_type);
     }
   | '*' pointer { 
-      $$ = driver.wrapPointer(std::move($2));
+      // continue to wrap the pointer type if multiple level pointer
+      $$ = driver.makePointerType(std::move($2));
     }
   | '*' type_qualifier pointer { driver.report_unimplemented_feature("pointer with type qualifier", @1); }
   | '*' type_qualifier { driver.report_unimplemented_feature("pointer with type qualifier", @1); }
@@ -424,6 +425,7 @@ type_name
 
 specifier_qualifier_list
 	: type_specifier specifier_qualifier_list {
+      // TODO this and the case below may need to be changed to accept more than just BuiltinType
       auto* type = new cAST::BuiltinType();
       type->type = $1;
       $$ = driver.combineSpecs(driver.makeSpecsFromTypeNode(std::unique_ptr<cAST::TypeNode>(type)), $2);
