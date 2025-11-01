@@ -1,8 +1,0 @@
-edition = "2024"
-max_width = 120
-wrap_comments = true
-format_strings = true
-error_on_line_overflow = false
-group_imports = "StdExternalCrate"
-imports_granularity = "Item"
-use_small_heuristics = "Max"
