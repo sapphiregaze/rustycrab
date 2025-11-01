@@ -279,15 +279,25 @@ struct FunctionType : public TypeNode {
   void accept(ASTWalker &v) override;
 };
 
-struct DeclSpecsAndQuals {
+struct DeclSpecs {
   std::vector<TYPE_STORAGE_QUALIFIER> storage;
   std::vector<TYPE_QUALIFIER> qualifiers;
-  std::unique_ptr<TypeNode> type;
+  // TODO does this need to be changed to be a type node?
+  // std::unique_ptr<TypeNode> type;
+  BUILTIN_TYPE type;
 
-  void set_type(std::unique_ptr<TypeNode> t) {
-    type = std::move(t);
+  void set_from_builtin_type(BUILTIN_TYPE bt) {
+    type = bt;
   }
 
+  void set_from_type_node(std::unique_ptr<TypeNode> typeNode) {
+    // For simplicity, only handle BuiltinType here
+    if (auto* bt = dynamic_cast<cAST::BuiltinType*>(typeNode.get())) {
+      type = bt->type;
+      qualifiers = bt->qualifiers;
+    }
+    // TODO Handle other TypeNode derived types as needed
+  }
   bool isInline{false};
   bool isNoreturn{false};
 };
@@ -574,7 +584,7 @@ struct VarDecl : public Decl {
   std::string name;
   std::unique_ptr<TypeNode> type;
   std::unique_ptr<Expr> init;
-  std::unique_ptr<DeclSpecsAndQuals> specs;
+  std::unique_ptr<DeclSpecs> specs;
 
   void set_type(std::unique_ptr<TypeNode> t) {
     type = std::move(t);
@@ -584,7 +594,7 @@ struct VarDecl : public Decl {
     init = std::move(i);
   }
 
-  void set_specs(std::unique_ptr<DeclSpecsAndQuals> s) {
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
     specs = std::move(s);
   }
 
@@ -603,7 +613,7 @@ struct DeclGroup : public Decl {
 
 struct ParamDecl : public Decl {
   std::unique_ptr<TypeNode> type;
-  std::unique_ptr<DeclSpecsAndQuals> specs;
+  std::unique_ptr<DeclSpecs> specs;
   std::unique_ptr<Decl> paramDecl;
 
   void set_type(std::unique_ptr<TypeNode> t) {
@@ -614,7 +624,7 @@ struct ParamDecl : public Decl {
     paramDecl = std::move(p);
   }
 
-  void set_specs(std::unique_ptr<DeclSpecsAndQuals> s) {
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
     specs = std::move(s);
   }
 
@@ -627,9 +637,9 @@ struct ArrayDecl : public Decl {
   std::string name;
   std::unique_ptr<TypeNode> baseType;
   std::unique_ptr<Expr> sizeExpr;
-  std::unique_ptr<DeclSpecsAndQuals> specs;
+  std::unique_ptr<DeclSpecs> specs;
 
-  void set_specs(std::unique_ptr<DeclSpecsAndQuals> s) {
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
     specs = std::move(s);
   }
   void set_sizeExpr(std::unique_ptr<Expr> s) {
@@ -644,13 +654,13 @@ struct ArrayDecl : public Decl {
 
 struct PointerDecl : public Decl {
   std::unique_ptr<Decl> baseDecl;
-  std::unique_ptr<DeclSpecsAndQuals> specs;
+  std::unique_ptr<DeclSpecs> specs;
   std::unique_ptr<Expr> init;
 
   void set_baseDecl(std::unique_ptr<Decl> b) {
     baseDecl = std::move(b);
   }
-  void set_specs(std::unique_ptr<DeclSpecsAndQuals> s) {
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
     specs = std::move(s);
   }
 
@@ -669,7 +679,7 @@ struct FunctionDecl : public Decl {
   std::unique_ptr<TypeNode> type;
   std::vector<std::unique_ptr<ParamDecl>> params;
   // DeclSpecs specs;
-  std::unique_ptr<DeclSpecsAndQuals> specs;
+  std::unique_ptr<DeclSpecs> specs;
   std::unique_ptr<ASTNode> body;
   // indefinite arity;; idk if we implement tthat
   bool isVariadic{false};
@@ -682,7 +692,7 @@ struct FunctionDecl : public Decl {
   //   specs = s;
   // }
 
-  void set_specs(std::unique_ptr<DeclSpecsAndQuals> s) {
+  void set_specs(std::unique_ptr<DeclSpecs> s) {
     specs = std::move(s);
   }
 
